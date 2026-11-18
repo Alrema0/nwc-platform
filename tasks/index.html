@@ -265,6 +265,10 @@ body.standalone .back,body.standalone .tri h3 button{display:none}
 .share-row input{width:100%;border:1px solid #d6e1ea;border-radius:7px;padding:7px 10px;font-size:12px;background:#f7fafc;text-align:left}
 .resp-preview{margin-top:12px;display:flex;align-items:center;gap:8px;background:#f4f8fb;border-radius:8px;padding:9px 12px;font-size:12.5px}
 @media (max-width:760px){.staff-row,.target-row{grid-template-columns:1fr auto}.staff-row .progress,.target-row .progress{grid-column:1/-1;grid-row:2}}
+.sync-wrap{display:flex;align-items:center;gap:6px;margin-right:auto}
+.sync{font-size:11.5px;padding:2px 10px;border-radius:20px;background:#eef3f7;color:#5f7182;white-space:nowrap}
+.sync.ok{background:#e7f4ec;color:#256b42}.sync.error{background:#fdece6;color:#a63a10}.sync.loading,.sync.saving{background:#fbf2e3;color:#8a5a12}
+.filter-bar .stamp{margin-right:0}
 /* Modal */
 .modal-bg{position:fixed;inset:0;background:rgba(18,40,60,.38);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:40px 16px;overflow:auto}
 .modal-bg.open{display:flex}
@@ -357,7 +361,7 @@ const isoD=d=>{const z=new Date(d.getTime()-d.getTimezoneOffset()*6e4);return z.
 const TODAY=isoD(new Date());
 const addDays=n=>{const d=new Date();d.setDate(d.getDate()+n);return isoD(d)};
 const daysBetween=(a,b)=>Math.round((Date.parse(b)-Date.parse(a))/864e5);
-const fdate=v=>!v||isNaN(Date.parse(v))?'—':new Date(v+'T12:00:00').toLocaleDateString('ar-SA-u-ca-gregory-nu-latn',{day:'numeric',month:'short',year:'numeric'});
+const fdate=v=>!v||isNaN(Date.parse(v))?'-':new Date(v+'T12:00:00').toLocaleDateString('ar-SA-u-ca-gregory-nu-latn',{day:'numeric',month:'short',year:'numeric'});
 const toEn=s=>String(s??'').replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c)).replace(/[۰-۹]/g,c=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(c)).replace(/[٬,]/g,'').replace(/٫/g,'.');
 const numeric=v=>String(v??'').trim()===''?NaN:Number(toEn(v));
 const uid=p=>p+Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-3);
@@ -398,7 +402,7 @@ const badge=(txt,cls)=>`<span class="badge ${cls||''}">${esc(txt)}</span>`;
 
 /* ---------- Section pages you add yourself ----------
    Projects: your ready inventory page, shown inside the platform.
-   Assets: left empty on purpose — put the asset inventory page URL here later. */
+   Assets: left empty on purpose - put the asset inventory page URL here later. */
 const PAGES={
   projects:'https://alrema0.github.io/project-inventory/',
   assets:''
@@ -468,6 +472,34 @@ function seedWork(){
 function loadWork(){ try{const r=localStorage.getItem(WORK_KEY); if(r){const d=JSON.parse(r); if(d&&Array.isArray(d.entries)&&Array.isArray(d.staff)) return d;}}catch(e){} return seedWork(); }
 let W=loadWork();
 function saveWork(){ W.updated=new Date().toISOString(); try{localStorage.setItem(WORK_KEY,JSON.stringify(W));}catch(e){} }
+
+/* ---------- Google Sheets link ----------
+   Put the web-app URL of the tasks spreadsheet (Apps Script) here.
+   Empty = the data stays in this browser only (sample data). */
+const SHEET_URL='';
+const SYNC={state:SHEET_URL?'loading':'local',at:null,err:''};
+const EMPTY_W=()=>({staff:[],orgTargets:[],deptTargets:[],entries:[],slaMinutes:120});
+function normalize(d){ const n=o=>{for(const k of ['monthlyVisits','targetValue','prior','qty']) if(k in o&&o[k]!=='') o[k]=Number(o[k]); return o;};
+  return {staff:(d.staff||[]).map(n),orgTargets:d.orgTargets||[],deptTargets:(d.deptTargets||[]).map(n),entries:(d.entries||[]).map(n),slaMinutes:Number(d.slaMinutes)||120,updated:new Date().toISOString()}; }
+if(SHEET_URL){ try{const c=JSON.parse(localStorage.getItem(WORK_KEY+'-sheet')||'null'); W=c&&Array.isArray(c.entries)?c:EMPTY_W();}catch(e){W=EMPTY_W();} }
+function cacheSheet(){ try{localStorage.setItem(WORK_KEY+'-sheet',JSON.stringify(W));}catch(e){} }
+async function sheetCall(body){
+  const opt=body?{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'text/plain;charset=utf-8'}}:{};
+  const r=await fetch(SHEET_URL,{...opt,redirect:'follow'}); const d=await r.json(); if(!d.ok) throw new Error(d.error||'خطأ غير معروف'); return d.data; }
+async function pull(silent){ if(!SHEET_URL) return; SYNC.state='loading'; if(!silent) syncBadge();
+  try{ W=normalize(await sheetCall()); cacheSheet(); SYNC.state='ok'; SYNC.at=new Date(); SYNC.err=''; }catch(e){ SYNC.state='error'; SYNC.err=String(e&&e.message||e); }
+  if(!$('#modal-bg').classList.contains('open')) render(); else syncBadge(); }
+async function push(body,okMsg){
+  if(!SHEET_URL){ saveWork(); if(okMsg) toast(okMsg); return; }
+  SYNC.state='saving'; syncBadge();
+  try{ W=normalize(await sheetCall(body)); cacheSheet(); SYNC.state='ok'; SYNC.at=new Date(); SYNC.err=''; if(okMsg) toast(okMsg); }
+  catch(e){ SYNC.state='error'; SYNC.err=String(e&&e.message||e); toast('تعذر الحفظ في جدول البيانات - أعد المحاولة'); await pull(true); return; }
+  if(!$('#modal-bg').classList.contains('open')) render(); else syncBadge(); }
+function syncHTML(){
+  if(!SHEET_URL) return `<span class="sync local" data-tip="البيانات محفوظة في هذا المتصفح فقط">● محفوظة في هذا المتصفح</span>`;
+  const m={loading:'جارٍ التحميل…',saving:'جارٍ الحفظ…',ok:'متصل بجدول البيانات',error:'تعذر الاتصال بجدول البيانات'};
+  return `<span class="sync ${SYNC.state}" ${SYNC.err?`data-tip="${esc(SYNC.err)}"`:''}>● ${m[SYNC.state]}${SYNC.at&&SYNC.state==='ok'?' · '+SYNC.at.toLocaleTimeString('ar-SA-u-nu-latn',{hour:'2-digit',minute:'2-digit'}):''}</span><button class="link-btn" data-act="refresh">تحديث</button>`; }
+function syncBadge(){ const el=document.getElementById('sync'); if(el) el.innerHTML=syncHTML(); }
 const staffById=id=>W.staff.find(s=>s.id===id);
 const dtById=id=>W.deptTargets.find(t=>t.id===id);
 const otById=id=>W.orgTargets.find(t=>t.id===id);
@@ -476,7 +508,7 @@ const workDepts=()=>[...new Set([...W.staff.map(s=>s.departmentName),...W.deptTa
 
 /* ---------- Calculations ---------- */
 const respMin=e=>{const a=Date.parse(e.arrivalTime),r=Date.parse(e.reportTime);return isNaN(a)||isNaN(r)?null:Math.max(0,Math.round((a-r)/6e4));};
-function fmtDur(m){ if(m==null||isNaN(m)) return '—'; m=Math.round(m); if(m<60) return m+' دقيقة'; const h=Math.floor(m/60),r=m%60; return h+' س'+(r?' '+r+' د':''); }
+function fmtDur(m){ if(m==null||isNaN(m)) return '-'; m=Math.round(m); if(m<60) return m+' دقيقة'; const h=Math.floor(m/60),r=m%60; return h+' س'+(r?' '+r+' د':''); }
 function periodRange(p){
   const n=new Date(), y=n.getFullYear(), m=n.getMonth(), dim=new Date(y,m+1,0).getDate(), f=n.getDate()/dim;
   const first=(yy,mm)=>isoD(new Date(yy,mm,1)), last=(yy,mm)=>isoD(new Date(yy,mm+1,0));
@@ -530,14 +562,14 @@ function sel(id,label,opts,val){return `<select id="${id}" aria-label="${label}"
 /* ---------- Views ---------- */
 const VIEWS=[
   {id:'assets',label:'الأصول',desc:''},
-  {id:'projects',label:'المشاريع',desc:'حصر مشاريع الإدارات — صفحة الحصر المؤسسية كما هي.'},
+  {id:'projects',label:'المشاريع',desc:'حصر مشاريع الإدارات - صفحة الحصر المؤسسية كما هي.'},
   {id:'tasks',label:'المهام',desc:'سجل أعمال الموظفين مرتبط بمستهدفات الإدارة والمنشأة، مع الزيارات الدورية والطارئة وسرعة الاستجابة.'},
   {id:'analysis',label:'التحليل الشامل',desc:'صفحة تحليلية تجمع الأقسام الثلاثة، وكل قسم يُقرأ من بياناته المستقلة.'}
 ];
 let current='home';
 const F={tasks:{period:'month',dep:'',staff:'',q:'',type:''},analysis:{period:'month',dep:''}};
 
-/* System title — change it here */
+/* System title - change it here */
 const SYSTEM_NAME='منصة الأعمال الموحدة';
 const SYSTEM_TAGLINE='الأصول · المشاريع · المهام';
 /* Standalone page: data-standalone="tasks" (or "analysis") on <html> shows one section only */
@@ -590,6 +622,7 @@ function filterBar(f,withStaff){
     ${withStaff?`<label for="w-staff">الموظف</label><select id="w-staff"><option value="">كل الموظفين</option>${staffOpts.map(s=>`<option value="${s.id}" ${s.id===f.staff?'selected':''}>${esc(s.name)}</option>`).join('')}</select>`:''}
     <label for="w-dep">الإدارة</label><select id="w-dep"><option value="">جميع الإدارات</option>${workDepts().map(d=>`<option ${d===f.dep?'selected':''}>${esc(d)}</option>`).join('')}</select>
     <label for="w-period">الفترة</label><select id="w-period">${PERIODS.map(([k,l])=>`<option value="${k}" ${k===f.period?'selected':''}>${l}</option>`).join('')}</select>
+    <span class="sync-wrap" id="sync">${syncHTML()}</span>
     <span class="stamp">${(()=>{const R=periodRange(f.period);return 'من '+fdate(R.from)+' إلى '+fdate(R.to);})()}</span></div>`;
 }
 function bindBar(kind){
@@ -616,7 +649,7 @@ function viewTasks(){
   const rows=sc.E.filter(e=>(!f.type||e.type===f.type)&&(!f.q||[e.description,e.site,staffById(e.staffId)?.name,dtById(e.targetId)?.title].some(x=>String(x||'').includes(f.q)))).sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
   const shown=rows.slice(0,f.all?rows.length:25);
   const buckets={}; const half=W.slaMinutes/2;
-  const bl=[`خلال ${fmtDur(half)}`,`${fmtDur(half)} – ${fmtDur(W.slaMinutes)}`,`أكثر من ${fmtDur(W.slaMinutes)}`];
+  const bl=[`خلال ${fmtDur(half)}`,`${fmtDur(half)} - ${fmtDur(W.slaMinutes)}`,`أكثر من ${fmtDur(W.slaMinutes)}`];
   sc.rts.forEach(v=>{const k=v<=half?bl[0]:v<=W.slaMinutes?bl[1]:bl[2]; buckets[k]=(buckets[k]||0)+1;});
   const linked=sc.E.filter(e=>dtById(e.targetId)).length;
   $('#view').innerHTML=`
@@ -643,9 +676,9 @@ function viewTasks(){
     <div class="filters"><div class="search">${icon('search')}<input id="fq" placeholder="ابحث في وصف العمل أو الموقع أو الموظف أو المستهدف" value="${esc(f.q)}"></div>${sel('ftype','كل الأنواع',W_TYPES,f.type)}</div>
     <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>الموظف</th><th>النوع</th><th>وش تم عمله</th><th>المستهدف</th><th>الموقع</th><th>الاستجابة</th><th></th></tr></thead><tbody>
     ${shown.length?shown.map(e=>{const s=staffById(e.staffId),t=dtById(e.targetId),r=e.type==='زيارة طارئة'?respMin(e):null;
-      return `<tr><td class="muted" style="white-space:nowrap">${fdate(e.date)}</td><td style="white-space:nowrap">${esc(s?s.name:'—')}</td><td>${badge(e.type,TYPE_BADGE[e.type])}${e.status==='قيد العمل'?' '+badge('قيد العمل','b-amber'):''}</td>
+      return `<tr><td class="muted" style="white-space:nowrap">${fdate(e.date)}</td><td style="white-space:nowrap">${esc(s?s.name:'-')}</td><td>${badge(e.type,TYPE_BADGE[e.type])}${e.status==='قيد العمل'?' '+badge('قيد العمل','b-amber'):''}</td>
       <td class="desc-cell">${esc(e.description)}${Number(e.qty)>1?` <span class="chip num">×${e.qty}</span>`:''}</td><td>${t?`<span class="chip" data-tip="${esc((otById(t.orgTargetId)||{}).title||'')}">${esc(t.title)}</span>`:'<span class="badge b-amber">غير مرتبط</span>'}</td>
-      <td class="muted">${esc(e.site||'—')}</td><td style="white-space:nowrap;${r!=null&&r>W.slaMinutes?'color:var(--bad);font-weight:600':''}">${r!=null?fmtDur(r):'—'}</td>
+      <td class="muted">${esc(e.site||'-')}</td><td style="white-space:nowrap;${r!=null&&r>W.slaMinutes?'color:var(--bad);font-weight:600':''}">${r!=null?fmtDur(r):'-'}</td>
       <td><div class="row-actions"><button class="icon-btn" data-edit="entries:${e.id}" title="تعديل" aria-label="تعديل">${icon('edit')}</button><button class="icon-btn del" data-del="entries:${e.id}" title="حذف" aria-label="حذف">${icon('trash')}</button></div></td></tr>`;}).join(''):`<tr><td colspan="8"><div class="empty">لا توجد أعمال مسجلة. اضغط «تسجيل عمل» لإضافة ما أنجزته.</div></td></tr>`}
     </tbody></table></div>
     ${rows.length>shown.length?`<div style="text-align:center;margin-top:12px"><button class="btn sm" data-act="more">عرض الكل (${rows.length})</button></div>`:''}
@@ -669,7 +702,7 @@ function viewAnalysis(){
     ...sc.em.filter(e=>respMin(e)>W.slaMinutes).sort((a,b)=>respMin(b)-respMin(a)).slice(0,8).map(e=>({lvl:1,ic:'alert',c:COLOR.amber,t:e.description,s:`استجابة طارئة تجاوزت المعيار · ${staffById(e.staffId)?.name||''}`,tag:fmtDur(respMin(e))}))
   ];
   const slotTri=(id,ic,color)=>{const url=PAGES[id];return `<div class="tri" style="border-top-color:${color}"><h3>${icon(ic)}${VIEWS.find(v=>v.id===id).label}<button data-view="${id}">فتح القسم ←</button></h3>
-    <div class="tri-wait">${icon(url?'link':'clock')}<span>${url?'تحليل المشاريع موجود داخل صفحة الحصر، ويظهر هنا بعد ربطها بجدول بيانات الحصر.':'لا توجد بيانات بعد — القسم بانتظار صفحة الحصر.'}</span></div></div>`;};
+    <div class="tri-wait">${icon(url?'link':'clock')}<span>${url?'تحليل المشاريع موجود داخل صفحة الحصر، ويظهر هنا بعد ربطها بجدول بيانات الحصر.':'لا توجد بيانات بعد - القسم بانتظار صفحة الحصر.'}</span></div></div>`;};
   $('#view').innerHTML=`
   ${filterBar(f,false)}
   <div class="grid section-tri">
@@ -690,14 +723,14 @@ function viewAnalysis(){
     <div class="table-wrap"><table class="matrix"><thead>
       <tr><th rowspan="2">الإدارة</th><th rowspan="2" class="sep">الموظفون</th><th colspan="2" class="sep">الزيارات الدورية</th><th colspan="3" class="sep">الزيارات الطارئة</th><th colspan="2" class="sep">المستهدفات</th></tr>
       <tr><th class="sub sep">المنجز / المطلوب</th><th class="sub">الالتزام</th><th class="sub sep">العدد</th><th class="sub">متوسط الاستجابة</th><th class="sub">ضمن المعيار</th><th class="sub sep">متوسط التحقق</th><th class="sub">متأخرة</th></tr></thead>
-      <tbody>${M.map(r=>`<tr><td><b>${esc(r.d)}</b></td><td class="num sep">${r.staff}</td><td class="num sep">${r.per} / ${r.req}</td><td>${r.req?paceBar(r.per,r.req,r.exp):'<span class="faint">—</span>'}</td>
-        <td class="num sep">${r.em||'—'}</td><td style="${r.avg>W.slaMinutes?'color:var(--bad);font-weight:600':''}">${r.em?fmtDur(r.avg):'—'}</td><td class="num">${r.sla!=null?r.sla+'%':'—'}</td>
-        <td class="num sep">${r.tAvg!=null?r.tAvg+'%':'—'}</td><td class="num" style="${r.tLate?'color:var(--bad);font-weight:600':''}">${r.tc?r.tLate:'—'}</td></tr>`).join('')}</tbody></table></div>
+      <tbody>${M.map(r=>`<tr><td><b>${esc(r.d)}</b></td><td class="num sep">${r.staff}</td><td class="num sep">${r.per} / ${r.req}</td><td>${r.req?paceBar(r.per,r.req,r.exp):'<span class="faint">-</span>'}</td>
+        <td class="num sep">${r.em||'-'}</td><td style="${r.avg>W.slaMinutes?'color:var(--bad);font-weight:600':''}">${r.em?fmtDur(r.avg):'-'}</td><td class="num">${r.sla!=null?r.sla+'%':'-'}</td>
+        <td class="num sep">${r.tAvg!=null?r.tAvg+'%':'-'}</td><td class="num" style="${r.tLate?'color:var(--bad);font-weight:600':''}">${r.tc?r.tLate:'-'}</td></tr>`).join('')}</tbody></table></div>
   </section>
   <div class="grid cols-2">
     ${targetsPanel(f.dep,'المستهدفات')}
     <section class="panel"><div class="panel-head"><h2>تنبيهات تحتاج متابعة</h2><span class="hint num">${alerts.length} تنبيه</span></div>
-      <div class="alerts">${alerts.length?alerts.map(a=>`<div class="alert-item"><span class="dot" style="background:${a.c}1a;color:${a.c}">${icon(a.ic)}</span><div><b>${esc(a.t)}</b><small>${esc(a.s)}</small></div><span class="tag faint">${esc(a.tag)}</span></div>`).join(''):'<div class="empty">لا توجد تنبيهات — كل شيء في مساره</div>'}</div></section>
+      <div class="alerts">${alerts.length?alerts.map(a=>`<div class="alert-item"><span class="dot" style="background:${a.c}1a;color:${a.c}">${icon(a.ic)}</span><div><b>${esc(a.t)}</b><small>${esc(a.s)}</small></div><span class="tag faint">${esc(a.tag)}</span></div>`).join(''):'<div class="empty">لا توجد تنبيهات - كل شيء في مساره</div>'}</div></section>
   </div>`;
   bindBar('analysis');
 }
@@ -709,11 +742,11 @@ const head=t=>`<div class="modal-head"><h3>${t}</h3><button class="icon-btn" dat
 
 
 /* ---------- Forms ---------- */
-const targetOpts=()=>{const g=W.orgTargets.map(o=>({group:o.title,opts:W.deptTargets.filter(t=>t.orgTargetId===o.id).map(t=>({v:t.id,l:t.title+' — '+t.departmentName}))})).filter(x=>x.opts.length);
+const targetOpts=()=>{const g=W.orgTargets.map(o=>({group:o.title,opts:W.deptTargets.filter(t=>t.orgTargetId===o.id).map(t=>({v:t.id,l:t.title+' - '+t.departmentName}))})).filter(x=>x.opts.length);
   const orphan=W.deptTargets.filter(t=>!otById(t.orgTargetId)); if(orphan.length) g.push({group:'غير مرتبط بمستهدف للمنشأة',opts:orphan.map(t=>({v:t.id,l:t.title}))}); return g;};
 const ENT={
   entries:{arr:()=>W.entries,single:'عمل',title:'تسجيل عمل',fields:[
-    {k:'staffId',l:'الموظف',type:'select',opts:()=>W.staff.map(s=>({v:s.id,l:s.name+' — '+s.departmentName})),req:1},
+    {k:'staffId',l:'الموظف',type:'select',opts:()=>W.staff.map(s=>({v:s.id,l:s.name+' - '+s.departmentName})),req:1},
     {k:'date',l:'التاريخ',type:'date',req:1},
     {k:'type',l:'نوع العمل',type:'select',opts:()=>W_TYPES.map(x=>({v:x,l:x})),req:1},
     {k:'status',l:'الحالة',type:'select',opts:()=>['منجز','قيد العمل'].map(x=>({v:x,l:x})),req:1},
@@ -750,8 +783,8 @@ function openForm(kind,id,back){
   const cfg=ENT[kind], rec=id?cfg.arr().find(x=>x.id===id):null, o={...(rec||{})};
   if(!rec&&kind==='entries'){ o.date=TODAY; o.status='منجز'; o.qty=1; if(F.tasks.staff) o.staffId=F.tasks.staff; }
   const field=f=>{ const v=o[f.k]??''; const idA=`fld-${f.k}`; let inp;
-    if(f.type==='select') inp=`<select id="${idA}" name="${f.k}"><option value="">— اختر —</option>${f.opts().map(x=>`<option value="${esc(x.v)}" ${String(x.v)===String(v)?'selected':''}>${esc(x.l)}</option>`).join('')}</select>`;
-    else if(f.type==='group') inp=`<select id="${idA}" name="${f.k}"><option value="">— اختر المستهدف —</option>${f.opts().map(g=>`<optgroup label="${esc(g.group)}">${g.opts.map(x=>`<option value="${esc(x.v)}" ${x.v===v?'selected':''}>${esc(x.l)}</option>`).join('')}</optgroup>`).join('')}</select>`;
+    if(f.type==='select') inp=`<select id="${idA}" name="${f.k}"><option value="">- اختر -</option>${f.opts().map(x=>`<option value="${esc(x.v)}" ${String(x.v)===String(v)?'selected':''}>${esc(x.l)}</option>`).join('')}</select>`;
+    else if(f.type==='group') inp=`<select id="${idA}" name="${f.k}"><option value="">- اختر المستهدف -</option>${f.opts().map(g=>`<optgroup label="${esc(g.group)}">${g.opts.map(x=>`<option value="${esc(x.v)}" ${x.v===v?'selected':''}>${esc(x.l)}</option>`).join('')}</optgroup>`).join('')}</select>`;
     else if(f.type==='area') inp=`<textarea id="${idA}" name="${f.k}" placeholder="${esc(f.ph||'')}">${esc(v)}</textarea>`;
     else inp=`<input id="${idA}" name="${f.k}" type="${f.type==='num'?'text':f.type||'text'}" ${f.type==='num'?'inputmode="numeric"':''} ${f.list?`list="dl-${f.list}"`:''} value="${esc(v)}" placeholder="${esc(f.ph||'')}">`;
     return `<div class="field ${f.full?'full':''}" ${f.when?`data-when="${esc(f.when)}"`:''}><label for="${idA}">${f.l}${f.req||f.when?' <i>*</i>':''}</label>${inp}</div>`; };
@@ -773,8 +806,9 @@ function openForm(kind,id,back){
     const errs=validate(kind,n);
     if(errs.length){ $('#form-errors').innerHTML=`<div class="errors" role="alert"><b>يرجى مراجعة ما يلي:</b><ul>${errs.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`; $('#modal-bg').scrollTop=0; return; }
     if(rec) Object.assign(rec,n); else cfg.arr().unshift(n);
-    saveWork(); render(); toast(rec?'تم حفظ التعديلات':kind==='entries'?'تم تسجيل العمل':'تمت الإضافة');
+    const msg=rec?'تم حفظ التعديلات':kind==='entries'?'تم تسجيل العمل':'تمت الإضافة';
     if(back) manage(back); else closeModal();
+    if(SHEET_URL){ render(); push({action:'upsert',kind,record:n},msg); } else { saveWork(); render(); toast(msg); }
   });
 }
 function manage(kind){
@@ -787,7 +821,7 @@ function manage(kind){
     `<div class="tabs"><button class="btn sm" data-manage="dtargets">← مستهدفات الإدارات</button></div>`;
   openModal(`${head(cfg.title)}<div class="modal-body">${extra}<div class="manage-list">${cfg.arr().length?cfg.arr().map(x=>`<div class="m-row"><div>${row(x)}</div><div class="row-actions"><button class="icon-btn" data-edit="${kind}:${x.id}" aria-label="تعديل">${icon('edit')}</button><button class="icon-btn del" data-del="${kind}:${x.id}" aria-label="حذف">${icon('trash')}</button></div></div>`).join(''):'<div class="empty">لا توجد عناصر بعد</div>'}</div></div>
     <div class="modal-foot"><button class="btn primary" data-add="${kind}" data-back="${kind}">${icon('plus')}إضافة ${cfg.single}</button><button class="btn" data-close>إغلاق</button></div>`);
-  const sla=$('#sla'); if(sla) sla.onchange=()=>{const v=Number(toEn(sla.value)); if(v>0){W.slaMinutes=Math.round(v);saveWork();render();toast('تم تحديث المعيار');} else { sla.value=W.slaMinutes; toast('أدخل عدد دقائق صحيحاً'); } };
+  const sla=$('#sla'); if(sla) sla.onchange=()=>{const v=Number(toEn(sla.value)); if(v>0){W.slaMinutes=Math.round(v);render();push({action:'setting',key:'slaMinutes',value:W.slaMinutes},'تم تحديث المعيار');} else { sla.value=W.slaMinutes; toast('أدخل عدد دقائق صحيحاً'); } };
 }
 function confirmDelete(kind,id){
   const cfg=ENT[kind], rec=cfg.arr().find(x=>x.id===id); if(!rec) return;
@@ -799,7 +833,7 @@ function confirmDelete(kind,id){
   const name=rec.name||rec.title||rec.description;
   openModal(`${head('حذف '+cfg.single)}<div class="modal-body">${block?`<div class="errors" role="alert">${esc(block)}</div>`:`<p style="margin-top:0">هل تريد حذف «<b>${esc(name)}</b>»؟ لا يمكن التراجع عن الحذف.</p>`}</div>
     <div class="modal-foot">${block?'':`<button class="btn danger" id="do-del">${icon('trash')}حذف</button>`}<button class="btn" ${back?`data-manage="${back}"`:'data-close'}>${block?'رجوع':'إلغاء'}</button></div>`,true);
-  const b=$('#do-del'); if(b) b.onclick=()=>{ const arr=cfg.arr(); arr.splice(arr.indexOf(rec),1); saveWork(); render(); toast('تم الحذف'); if(back) manage(back); else closeModal(); };
+  const b=$('#do-del'); if(b) b.onclick=()=>{ const arr=cfg.arr(); arr.splice(arr.indexOf(rec),1); if(back) manage(back); else closeModal(); render(); push({action:'delete',kind,id},'تم الحذف'); };
 }
 
 /* ---------- Share & data ---------- */
@@ -817,8 +851,8 @@ function shareLinks(){
   </div><div class="modal-foot"><button class="btn" data-close>إغلاق</button></div>`);
 }
 function dataMenu(){
-  openModal(`${head('بيانات المهام')}<div class="modal-body"><p class="muted" style="margin-top:0">بيانات المهام تُحفظ في هذا المتصفح، منفصلة عن الأقسام الأخرى.</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="export">نسخ البيانات</button><button class="btn" data-act="import">استيراد</button><button class="btn danger" data-act="reset">استعادة البيانات التجريبية</button></div></div>
+  openModal(`${head('بيانات المهام')}<div class="modal-body"><p class="muted" style="margin-top:0">${SHEET_URL?'بيانات المهام محفوظة في جدول البيانات المشترك، منفصلة عن الأقسام الأخرى.':'بيانات المهام تُحفظ في هذا المتصفح، منفصلة عن الأقسام الأخرى.'}</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="export">نسخ البيانات</button><button class="btn" data-act="import">استيراد</button><button class="btn danger" data-act="reset">${SHEET_URL?'رفع بيانات تجريبية إلى الجدول':'استعادة البيانات التجريبية'}</button></div></div>
     <div class="modal-foot"><button class="btn" data-close>إغلاق</button></div>`,true);
 }
 function exportData(){
@@ -828,12 +862,12 @@ function exportData(){
 function importData(){
   openModal(`${head('استيراد بيانات المهام')}<div class="modal-body"><div id="imp-err"></div><p class="muted" style="margin-top:0">الصق النص المنسوخ من قسم المهام أو اختر ملف JSON. يستبدل الاستيراد بيانات المهام الحالية.</p><textarea class="json-box" id="jin"></textarea><input type="file" id="jfile" accept=".json,application/json" style="margin-top:10px"></div><div class="modal-foot"><button class="btn primary" id="doimp">استيراد</button><button class="btn" data-close>إلغاء</button></div>`);
   $('#jfile').onchange=async e=>{const f=e.target.files[0]; if(f) $('#jin').value=await f.text();};
-  $('#doimp').onclick=()=>{ try{ const d=JSON.parse($('#jin').value); if(d.section!=='work'||!Array.isArray(d.entries)||!Array.isArray(d.staff)) throw 0; delete d.section; W=d; saveWork(); closeModal(); render(); toast('تم الاستيراد'); }
+  $('#doimp').onclick=()=>{ try{ const d=JSON.parse($('#jin').value); if(d.section!=='work'||!Array.isArray(d.entries)||!Array.isArray(d.staff)) throw 0; delete d.section; W=normalize(d); closeModal(); render(); push({action:'replaceAll',data:W},'تم الاستيراد'); }
     catch(e){ $('#imp-err').innerHTML='<div class="errors" role="alert">النص غير صالح لقسم المهام.</div>'; } };
 }
 function resetData(){
-  openModal(`${head('استعادة البيانات التجريبية')}<div class="modal-body"><p style="margin-top:0">ستُستبدل كل بيانات المهام (الأعمال والموظفون والمستهدفات) بالبيانات التجريبية.</p></div><div class="modal-foot"><button class="btn danger" id="dores">${icon('reset')}استعادة</button><button class="btn" data-close>إلغاء</button></div>`,true);
-  $('#dores').onclick=()=>{W=seedWork();saveWork();closeModal();render();toast('تمت الاستعادة');};
+  openModal(`${head('استعادة البيانات التجريبية')}<div class="modal-body"><p style="margin-top:0">ستُستبدل كل بيانات المهام (الأعمال والموظفون والمستهدفات) بالبيانات التجريبية${SHEET_URL?' <b>في جدول البيانات المشترك لكل المستخدمين</b>':''}.</p></div><div class="modal-foot"><button class="btn danger" id="dores">${icon('reset')}استعادة</button><button class="btn" data-close>إلغاء</button></div>`,true);
+  $('#dores').onclick=()=>{W=seedWork();closeModal();render();push({action:'replaceAll',data:W},SHEET_URL?'تم رفع البيانات التجريبية إلى الجدول':'تمت الاستعادة');};
 }
 async function copyText(txt,el){ try{await navigator.clipboard.writeText(txt);toast('تم النسخ');}catch(e){ if(el){el.select();} toast('حدّد النص وانسخه يدوياً'); } }
 
@@ -848,13 +882,14 @@ document.addEventListener('click',e=>{
   else if('close' in t.dataset) closeModal();
   else if(t.dataset.copy) copyText(t.dataset.copy,t.parentNode.querySelector('input'));
   else if('copyBox' in t.dataset) copyText($('#jbox').value,$('#jbox'));
-  else { const a=t.dataset.act; if(a==='share') shareLinks(); else if(a==='data') dataMenu(); else if(a==='export') exportData(); else if(a==='import') importData(); else if(a==='reset') resetData(); else if(a==='more'){F.tasks.all=true;render();} }
+  else { const a=t.dataset.act; if(a==='share') shareLinks(); else if(a==='data') dataMenu(); else if(a==='export') exportData(); else if(a==='import') importData(); else if(a==='reset') resetData(); else if(a==='more'){F.tasks.all=true;render();} else if(a==='refresh') pull(); }
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('#modal-bg').classList.contains('open')) closeModal(); });
 const tip=$('#tip');
 document.addEventListener('mousemove',e=>{ const t=e.target.closest('[data-tip]'); if(!t){tip.classList.remove('show');return;} tip.textContent=t.dataset.tip; tip.classList.add('show'); const w=tip.offsetWidth; tip.style.left=Math.min(window.innerWidth-w-8,Math.max(8,e.clientX-w/2))+'px'; tip.style.top=(e.clientY-tip.offsetHeight-12)+'px'; });
 window.addEventListener('hashchange',()=>{const h=location.hash.slice(1); if((h||'home')!==current) go(h||'home');});
 go(location.hash.slice(1)||'home');
+if(SHEET_URL) pull(true);
 </script>
 </body>
 </html>
