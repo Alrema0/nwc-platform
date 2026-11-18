@@ -252,6 +252,7 @@ body.standalone .back,body.standalone .tri h3 button{display:none}
 .org-group .target-row{padding:8px 0;border-top:1px dashed #edf1f4}
 .desc-cell{min-width:220px;max-width:380px}
 .filter-bar select{max-width:230px}
+.filter-bar input[type=date]{border:1px solid var(--line);border-radius:7px;padding:5px 8px;background:#fff}
 .manage-list{display:flex;flex-direction:column;gap:6px;max-height:55vh;overflow:auto}
 .m-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #eef2f5;border-radius:9px}
 .m-row>div:first-child{flex:1;min-width:0}
@@ -509,15 +510,18 @@ const workDepts=()=>[...new Set([...W.staff.map(s=>s.departmentName),...W.deptTa
 /* ---------- Calculations ---------- */
 const respMin=e=>{const a=Date.parse(e.arrivalTime),r=Date.parse(e.reportTime);return isNaN(a)||isNaN(r)?null:Math.max(0,Math.round((a-r)/6e4));};
 function fmtDur(m){ if(m==null||isNaN(m)) return '-'; m=Math.round(m); if(m<60) return m+' دقيقة'; const h=Math.floor(m/60),r=m%60; return h+' س'+(r?' '+r+' د':''); }
-function periodRange(p){
+function periodRange(p,opt){
   const n=new Date(), y=n.getFullYear(), m=n.getMonth(), dim=new Date(y,m+1,0).getDate(), f=n.getDate()/dim;
   const first=(yy,mm)=>isoD(new Date(yy,mm,1)), last=(yy,mm)=>isoD(new Date(yy,mm+1,0));
+  if(p==='custom'){ let a=(opt&&opt.from)||first(y,m), b=(opt&&opt.to)||TODAY; if(b<a) [a,b]=[b,a];
+    const days=daysBetween(a,b)+1, done=b<=TODAY?days:Math.max(0,daysBetween(a,TODAY)+1);
+    return {from:a,to:b,months:days/30.44,frac:days?Math.min(1,done/days):1,label:'الفترة المحددة'}; }
   if(p==='prev') return {from:first(y,m-1),to:last(y,m-1),months:1,frac:1,label:'الشهر الماضي'};
   if(p==='q') return {from:first(y,m-2),to:TODAY,months:3,frac:(2+f)/3,label:'آخر ٣ أشهر'};
   if(p==='year') return {from:first(y,0),to:TODAY,months:m+1,frac:(m+f)/(m+1),label:'هذه السنة'};
   return {from:first(y,m),to:TODAY,months:1,frac:f,label:'هذا الشهر'};
 }
-const PERIODS=[['month','هذا الشهر'],['prev','الشهر الماضي'],['q','آخر ٣ أشهر'],['year','هذه السنة']];
+const PERIODS=[['month','هذا الشهر'],['prev','الشهر الماضي'],['q','آخر ٣ أشهر'],['year','هذه السنة'],['custom','من تاريخ إلى تاريخ']];
 const YSTART=isoD(new Date(new Date().getFullYear(),0,1));
 const YFRAC=(()=>{const n=new Date(),s=new Date(n.getFullYear(),0,1),e=new Date(n.getFullYear()+1,0,1);return (n-s)/(e-s);})();
 function tAch(t){ return (Number(t.prior)||0)+W.entries.filter(e=>e.targetId===t.id&&e.date>=YSTART&&e.date<=TODAY&&e.status!=='قيد العمل').reduce((s,e)=>s+(Number(e.qty)||1),0); }
@@ -527,15 +531,15 @@ const V_ST_BADGE={'مكتمل':'b-green','على المسار':'b-blue','متأ�
 
 // Everything for one scope (period + department + employee)
 function scope(f){
-  const R=periodRange(f.period||'month');
+  const R=periodRange(f.period||'month',f);
   const S=W.staff.filter(s=>(!f.dep||s.departmentName===f.dep)&&(!f.staff||s.id===f.staff));
   const ids=new Set(S.map(s=>s.id));
   const E=W.entries.filter(e=>ids.has(e.staffId)&&e.date>=R.from&&e.date<=R.to);
   const per=E.filter(e=>e.type==='زيارة دورية'), em=E.filter(e=>e.type==='زيارة طارئة'), tasks=E.filter(e=>e.type==='مهمة');
-  const required=S.reduce((s,x)=>s+(Number(x.monthlyVisits)||0),0)*R.months, expected=Math.round(required*R.frac);
+  const required=Math.round(S.reduce((s,x)=>s+(Number(x.monthlyVisits)||0),0)*R.months), expected=Math.round(required*R.frac);
   const rts=em.map(respMin).filter(v=>v!=null), avgResp=rts.length?rts.reduce((a,b)=>a+b,0)/rts.length:null;
   const inSla=rts.filter(v=>v<=W.slaMinutes).length;
-  const staffRows=S.map(s=>{const mine=E.filter(e=>e.staffId===s.id), done=mine.filter(e=>e.type==='زيارة دورية').length, req=(Number(s.monthlyVisits)||0)*R.months, exp=req*R.frac;
+  const staffRows=S.map(s=>{const mine=E.filter(e=>e.staffId===s.id), done=mine.filter(e=>e.type==='زيارة دورية').length, req=Math.round((Number(s.monthlyVisits)||0)*R.months), exp=req*R.frac;
     const ems=mine.filter(e=>e.type==='زيارة طارئة'), r=ems.map(respMin).filter(v=>v!=null);
     return {s,done,req,exp,st:req&&done>=req?'مكتمل':done>=exp*0.9?'على المسار':'متأخر',em:ems.length,avg:r.length?r.reduce((a,b)=>a+b,0)/r.length:null,sla:r.length?pct(r.filter(v=>v<=W.slaMinutes).length,r.length):null,entries:mine.length};});
   return {R,S,E,per,em,tasks,required,expected,avgResp,inSla,rts,staffRows};
@@ -622,13 +626,14 @@ function filterBar(f,withStaff){
     ${withStaff?`<label for="w-staff">الموظف</label><select id="w-staff"><option value="">كل الموظفين</option>${staffOpts.map(s=>`<option value="${s.id}" ${s.id===f.staff?'selected':''}>${esc(s.name)}</option>`).join('')}</select>`:''}
     <label for="w-dep">الإدارة</label><select id="w-dep"><option value="">جميع الإدارات</option>${workDepts().map(d=>`<option ${d===f.dep?'selected':''}>${esc(d)}</option>`).join('')}</select>
     <label for="w-period">الفترة</label><select id="w-period">${PERIODS.map(([k,l])=>`<option value="${k}" ${k===f.period?'selected':''}>${l}</option>`).join('')}</select>
+    ${f.period==='custom'?`<label for="w-from">من</label><input type="date" id="w-from" value="${esc(periodRange('custom',f).from)}" max="${TODAY}"><label for="w-to">إلى</label><input type="date" id="w-to" value="${esc(periodRange('custom',f).to)}">`:''}
     <span class="sync-wrap" id="sync">${syncHTML()}</span>
-    <span class="stamp">${(()=>{const R=periodRange(f.period);return 'من '+fdate(R.from)+' إلى '+fdate(R.to);})()}</span></div>`;
+    <span class="stamp">${(()=>{const R=periodRange(f.period,f);return 'من '+fdate(R.from)+' إلى '+fdate(R.to);})()}</span></div>`;
 }
 function bindBar(kind){
   const f=F[kind];
   const on=(id,k)=>{const el=document.getElementById(id); if(el) el.onchange=e=>{f[k]=e.target.value; if(k==='dep'&&f.staff&&staffById(f.staff)?.departmentName!==f.dep&&f.dep) f.staff=''; render();};};
-  on('w-staff','staff'); on('w-dep','dep'); on('w-period','period');
+  on('w-staff','staff'); on('w-dep','dep'); on('w-period','period'); on('w-from','from'); on('w-to','to');
 }
 
 function targetsPanel(dep,title){
