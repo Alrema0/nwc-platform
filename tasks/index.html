@@ -668,7 +668,7 @@ function filterBar(f){
   return `<div class="filter-bar">
     <label for="w-dep">الإدارة</label><select id="w-dep"><option value="">جميع الإدارات</option>${workDepts().map(d=>`<option ${d===f.dep?'selected':''}>${esc(d)}</option>`).join('')}</select>
     <label for="w-period">الفترة</label><select id="w-period">${PERIODS.map(([k,l])=>`<option value="${k}" ${k===f.period?'selected':''}>${l}</option>`).join('')}</select>
-    ${f.period==='custom'?`<label for="w-from">من</label><input type="date" id="w-from" value="${esc(periodRange('custom',f).from)}" max="${TODAY}"><label for="w-to">إلى</label><input type="date" id="w-to" value="${esc(periodRange('custom',f).to)}">`:''}
+    ${f.period==='custom'?`<label for="w-from">من</label><input type="date" id="w-from" value="${esc(periodRange('custom',f).from)}"><label for="w-to">إلى</label><input type="date" id="w-to" value="${esc(periodRange('custom',f).to)}">`:''}
     <span class="sync-wrap" id="sync">${syncHTML()}</span>
     <span class="stamp">${(()=>{const R=periodRange(f.period,f);return 'من '+fdate(R.from)+' إلى '+fdate(R.to);})()}</span></div>`;
 }
@@ -825,7 +825,6 @@ function validate(kind,o){
   if(kind==='entries'){
     if(o.qty!==''&&!(Number(o.qty)>0)) e.push('الكمية المنجزة رقم أكبر من صفر.');
     if(o.type!=='مهمة'&&!String(o.site||'').trim()) e.push('الموقع / المنشأة: حقل مطلوب للزيارات.');
-    if(o.date>TODAY) e.push('لا يجوز أن يكون التاريخ لاحقاً لتاريخ اليوم.');
     if(o.type==='زيارة طارئة'){ if(!o.reportTime||!o.arrivalTime) e.push('الزيارة الطارئة تتطلب وقت البلاغ ووقت الوصول لاحتساب سرعة الاستجابة.'); else if(Date.parse(o.arrivalTime)<Date.parse(o.reportTime)) e.push('وقت الوصول يسبق وقت البلاغ.'); }
   }
   if(kind==='depts'){ if(!(Number(o.monthlyVisits)>=0)) e.push('الزيارات المطلوبة رقم صفر أو أكثر.'); if(W.depts.some(d=>d.name===String(o.name).trim()&&d.id!==o.id)) e.push('هذه الإدارة مضافة مسبقاً.'); }
