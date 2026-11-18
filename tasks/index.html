@@ -912,24 +912,25 @@ async function downloadTemplate(btn){
   try{
     const X=await loadExcelLib(), wb=new X.Workbook();
     const deps=workDepts(), targets=W.deptTargets.map(t=>t.title);
-    const ref=(c,n)=>`'القوائم'!$${c}$2:$${c}$${Math.max(2,n+1)}`;
-    const lists={dept:[ref('A',deps.length),'اختر الإدارة من القائمة'],vtype:[ref('B',2),'اختر دورية أو طارئة'],status:[ref('C',2),'اختر منجز أو قيد العمل'],target:[ref('D',targets.length),'اختر المستهدف من القائمة']};
     const widths={description:50,target:44,dept:30,site:24,reportTime:20,arrivalTime:20,by:20};
     const make=(def,color)=>{ const ws=wb.addWorksheet(def.name,{views:[{rightToLeft:true,state:'frozen',ySplit:1}],properties:{tabColor:{argb:color}}});
       ws.columns=def.cols.map(([k,l])=>({header:l,key:k,width:widths[k]||14}));
       const hr=ws.getRow(1); hr.font={bold:true,color:{argb:'FFFFFFFF'}}; hr.fill={type:'pattern',pattern:'solid',fgColor:{argb:color}}; hr.height=22; hr.alignment={vertical:'middle'};
       def.cols.forEach(([k],ci)=>{ for(let r=2;r<=301;r++){ const c=ws.getCell(r,ci+1);
         if(k==='date') c.numFmt='yyyy-mm-dd'; if(k==='reportTime'||k==='arrivalTime') c.numFmt='yyyy-mm-dd hh:mm';
-        if(lists[k]&&!(k==='target'&&!targets.length)) c.dataValidation={type:'list',allowBlank:true,formulae:[lists[k][0]],showErrorMessage:true,error:lists[k][1]}; } });
+      } });
       return ws; };
-    make(XL_SHEETS.tasks,'FF124B7A'); make(XL_SHEETS.visits,'FF1976B8');
-    const L2=wb.addWorksheet('القوائم',{views:[{rightToLeft:true}]});
-    L2.getRow(1).values=['الإدارات','نوع الزيارة','الحالة','المستهدفات']; L2.getRow(1).font={bold:true};
-    [deps,V_TYPES,['منجز','قيد العمل'],targets].forEach((arr,c)=>arr.forEach((v,i)=>{ L2.getCell(i+2,c+1).value=v; }));
-    L2.columns=[{width:30},{width:14},{width:12},{width:52}];
-    const I=wb.addWorksheet('التعليمات',{views:[{rightToLeft:true}]});
-    ['طريقة التعبئة','','ورقة «المهام والأعمال»: الأعمال والمهام المنجزة، كل صف عمل واحد.','ورقة «الزيارات»: الزيارات الدورية والطارئة، كل صف زيارة واحدة.','','- الإدارة من القائمة المنسدلة، والمنفّذ والمستهدف اختياريان.','- التاريخ بصيغة 2026-11-18.','- في الزيارات: الموقع مطلوب، ونوع الزيارة دورية أو طارئة.','- للزيارة الطارئة: وقت البلاغ ووقت الوصول بصيغة 2026-11-18 08:30 لحساب سرعة الاستجابة.','- الكمية في المهام اختيارية (الافتراضي 1).','','بعد التعبئة: صفحة المهام ← رفع الملف المعبّأ.'].forEach((t,i)=>{I.getCell(i+1,1).value=t;});
-    I.getColumn(1).width=95; I.getCell(1,1).font={bold:true,size:13};
+    const sheets=[[XL_SHEETS.tasks,make(XL_SHEETS.tasks,'FF124B7A')],[XL_SHEETS.visits,make(XL_SHEETS.visits,'FF1976B8')]];
+    // Short lists go inside the cell rule; long ones are kept in a sheet hidden from users
+    let hidden=null; const longLists=[];
+    const listRef=(arr)=>{ const inline='"'+arr.map(x=>String(x).replace(/[",]/g,' ')).join(',')+'"';
+      if(inline.length<=250) return inline;
+      if(!hidden){ hidden=wb.addWorksheet('lists'); hidden.state='veryHidden'; }
+      const col=longLists.push(arr); arr.forEach((v,i)=>{ hidden.getCell(i+1,col).value=v; });
+      const L=String.fromCharCode(64+col); return `lists!$${L}$1:$${L}$${Math.max(1,arr.length)}`; };
+    const lists={dept:[listRef(deps),'اختر الإدارة من القائمة'],vtype:[listRef(V_TYPES),'اختر دورية أو طارئة'],status:[listRef(['منجز','قيد العمل']),'اختر منجز أو قيد العمل'],target:[targets.length?listRef(targets):null,'اختر المستهدف من القائمة']};
+    for(const [def,ws] of sheets) def.cols.forEach(([k],ci)=>{ if(!(lists[k]&&lists[k][0])) return;
+      for(let r=2;r<=301;r++) ws.getCell(r,ci+1).dataValidation={type:'list',allowBlank:true,formulae:[lists[k][0]],showErrorMessage:true,error:lists[k][1]}; });
     const buf=await wb.xlsx.writeBuffer();
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})); a.download='نموذج-سجل-الأعمال.xlsx'; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
     toast('تم تحميل النموذج');
