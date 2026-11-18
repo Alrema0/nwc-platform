@@ -426,7 +426,7 @@ const PAGES={
 };
 
 /* ---------- Work log (tasks page): own storage key ---------- */
-const WORK_KEY='nwc-portal-work-v1';
+const WORK_KEY='nwc-portal-work-v2';
 const W_TYPES=['مهمة','زيارة دورية','زيارة طارئة'];
 const TYPE_BADGE={'مهمة':'b-gray','زيارة دورية':'b-blue','زيارة طارئة':'b-red'};
 const SITES=['محطة ضخ الشمال','محطة معالجة جنوب الرياض','خزان الدمام الأرضي 2','خزان الخبر العلوي','شبكة حي الياسمين','شبكة حي النرجس','مستودع قطع الغيار المركزي','مبنى الإدارة الإقليمية بجدة'];
@@ -484,9 +484,11 @@ function seedWork(){
     delete s._v; delete s._t; delete s._f; delete s._e;
   }
   entries.sort((a,b)=>b.date.localeCompare(a.date));
-  return {orgTargets,deptTargets,staff,entries,slaMinutes:120,updated:new Date().toISOString()};
+  const depts=DEPS.map((d,i)=>({id:'u'+(i+1),name:d,monthlyVisits:staff.filter(s=>s.departmentName===d).reduce((a,s)=>a+s.monthlyVisits,0)}));
+  entries.forEach(e=>{const s=staff.find(x=>x.id===e.staffId); e.departmentName=s.departmentName; e.by=s.name; delete e.staffId;});
+  return {orgTargets,deptTargets,depts,entries,slaMinutes:120,updated:new Date().toISOString()};
 }
-function loadWork(){ try{const r=localStorage.getItem(WORK_KEY); if(r){const d=JSON.parse(r); if(d&&Array.isArray(d.entries)&&Array.isArray(d.staff)) return d;}}catch(e){} return seedWork(); }
+function loadWork(){ try{const r=localStorage.getItem(WORK_KEY); if(r){const d=JSON.parse(r); if(d&&Array.isArray(d.entries)&&Array.isArray(d.depts)) return d;}}catch(e){} return seedWork(); }
 let W=loadWork();
 function saveWork(){ W.updated=new Date().toISOString(); try{localStorage.setItem(WORK_KEY,JSON.stringify(W));}catch(e){} }
 
@@ -495,9 +497,9 @@ function saveWork(){ W.updated=new Date().toISOString(); try{localStorage.setIte
    Empty = the data stays in this browser only (sample data). */
 const SHEET_URL='https://script.google.com/macros/s/AKfycbwl1hM_gQF-Z2twrmJYVJawpiaFVAKiBEcrZjhOkExagikZH3FbINITTtoF7SarM65cBA/exec';
 const SYNC={state:SHEET_URL?'loading':'local',at:null,err:''};
-const EMPTY_W=()=>({staff:[],orgTargets:[],deptTargets:[],entries:[],slaMinutes:120});
+const EMPTY_W=()=>({depts:[],orgTargets:[],deptTargets:[],entries:[],slaMinutes:120});
 function normalize(d){ const n=o=>{for(const k of ['monthlyVisits','targetValue','prior','qty']) if(k in o&&o[k]!=='') o[k]=Number(o[k]); return o;};
-  return {staff:(d.staff||[]).map(n),orgTargets:d.orgTargets||[],deptTargets:(d.deptTargets||[]).map(n),entries:(d.entries||[]).map(n),slaMinutes:Number(d.slaMinutes)||120,updated:new Date().toISOString()}; }
+  return {depts:(d.depts||[]).map(n),orgTargets:d.orgTargets||[],deptTargets:(d.deptTargets||[]).map(n),entries:(d.entries||[]).map(n),slaMinutes:Number(d.slaMinutes)||120,updated:new Date().toISOString()}; }
 if(SHEET_URL){ try{const c=JSON.parse(localStorage.getItem(WORK_KEY+'-sheet')||'null'); W=c&&Array.isArray(c.entries)?c:EMPTY_W();}catch(e){W=EMPTY_W();} }
 function cacheSheet(){ try{localStorage.setItem(WORK_KEY+'-sheet',JSON.stringify(W));}catch(e){} }
 async function sheetCall(body){
@@ -517,11 +519,11 @@ function syncHTML(){
   const m={loading:'جارٍ التحميل…',saving:'جارٍ الحفظ…',ok:'متصل بجدول البيانات',error:'تعذر الاتصال بجدول البيانات'};
   return `<span class="sync ${SYNC.state}" ${SYNC.err?`data-tip="${esc(SYNC.err)}"`:''}>● ${m[SYNC.state]}${SYNC.at&&SYNC.state==='ok'?' · '+SYNC.at.toLocaleTimeString('ar-SA-u-nu-latn',{hour:'2-digit',minute:'2-digit'}):''}</span><button class="link-btn" data-act="refresh">تحديث</button>`; }
 function syncBadge(){ const el=document.getElementById('sync'); if(el) el.innerHTML=syncHTML(); }
-const staffById=id=>W.staff.find(s=>s.id===id);
+const deptByName=n=>W.depts.find(d=>d.name===n);
 const dtById=id=>W.deptTargets.find(t=>t.id===id);
 const otById=id=>W.orgTargets.find(t=>t.id===id);
 const byAr=(a,b)=>String(a).localeCompare(String(b),'ar');
-const workDepts=()=>[...new Set([...W.staff.map(s=>s.departmentName),...W.deptTargets.map(t=>t.departmentName)].filter(Boolean))].sort(byAr);
+const workDepts=()=>[...new Set([...W.depts.map(d=>d.name),...W.deptTargets.map(t=>t.departmentName),...W.entries.map(e=>e.departmentName)].filter(Boolean))].sort(byAr);
 
 /* ---------- Calculations ---------- */
 const respMin=e=>{const a=Date.parse(e.arrivalTime),r=Date.parse(e.reportTime);return isNaN(a)||isNaN(r)?null:Math.max(0,Math.round((a-r)/6e4));};
@@ -548,14 +550,13 @@ const V_ST_BADGE={'مكتمل':'b-green','على المسار':'b-blue','متأ�
 // Everything for one scope (period + department + employee)
 function scope(f){
   const R=periodRange(f.period||'month',f);
-  const S=W.staff.filter(s=>(!f.dep||s.departmentName===f.dep)&&(!f.staff||s.id===f.staff));
-  const ids=new Set(S.map(s=>s.id));
-  const E=W.entries.filter(e=>ids.has(e.staffId)&&e.date>=R.from&&e.date<=R.to);
+  const S=W.depts.filter(d=>!f.dep||d.name===f.dep);
+  const E=W.entries.filter(e=>(!f.dep||e.departmentName===f.dep)&&e.date>=R.from&&e.date<=R.to);
   const per=E.filter(e=>e.type==='زيارة دورية'), em=E.filter(e=>e.type==='زيارة طارئة'), tasks=E.filter(e=>e.type==='مهمة');
   const required=Math.round(S.reduce((s,x)=>s+(Number(x.monthlyVisits)||0),0)*R.months), expected=Math.round(required*R.frac);
   const rts=em.map(respMin).filter(v=>v!=null), avgResp=rts.length?rts.reduce((a,b)=>a+b,0)/rts.length:null;
   const inSla=rts.filter(v=>v<=W.slaMinutes).length;
-  const staffRows=S.map(s=>{const mine=E.filter(e=>e.staffId===s.id), done=mine.filter(e=>e.type==='زيارة دورية').length, req=Math.round((Number(s.monthlyVisits)||0)*R.months), exp=req*R.frac;
+  const staffRows=S.map(s=>{const mine=E.filter(e=>e.departmentName===s.name), done=mine.filter(e=>e.type==='زيارة دورية').length, req=Math.round((Number(s.monthlyVisits)||0)*R.months), exp=req*R.frac;
     const ems=mine.filter(e=>e.type==='زيارة طارئة'), r=ems.map(respMin).filter(v=>v!=null);
     return {s,done,req,exp,st:req&&done>=req?'مكتمل':done>=exp*0.9?'على المسار':'متأخر',em:ems.length,avg:r.length?r.reduce((a,b)=>a+b,0)/r.length:null,sla:r.length?pct(r.filter(v=>v<=W.slaMinutes).length,r.length):null,entries:mine.length};});
   return {R,S,E,per,em,tasks,required,expected,avgResp,inSla,rts,staffRows};
@@ -583,11 +584,11 @@ function sel(id,label,opts,val){return `<select id="${id}" aria-label="${label}"
 const VIEWS=[
   {id:'assets',label:'الأصول',desc:''},
   {id:'projects',label:'المشاريع',desc:'حصر مشاريع الإدارات - صفحة الحصر المؤسسية كما هي.'},
-  {id:'tasks',label:'المهام',desc:'سجل أعمال الموظفين مرتبط بمستهدفات الإدارة والمنشأة، مع الزيارات الدورية والطارئة وسرعة الاستجابة.'},
+  {id:'tasks',label:'المهام',desc:'سجل أعمال الإدارات مرتبط بمستهدفات الإدارة والمنشأة، مع الزيارات الدورية والطارئة وسرعة الاستجابة.'},
   {id:'analysis',label:'لوحة مؤشرات الأداء',desc:''}
 ];
 let current='home';
-const F={tasks:{period:'month',dep:'',staff:'',q:'',type:''},analysis:{period:'month',dep:''}};
+const F={tasks:{period:'month',dep:'',q:'',type:''},analysis:{period:'month',dep:''}};
 
 /* System title - change it here */
 const SYSTEM_NAME='منصة الأعمال الموحدة';
@@ -624,7 +625,7 @@ function render(){
   $('#crumb').textContent=STANDALONE?'':SYSTEM_NAME+' / '+v.label;
   $('#title').textContent=v.label; $('#desc').textContent=v.desc;
   const share=`<button class="btn sm" data-act="share">${icon('link')}مشاركة</button>`;
-  $('#actions').innerHTML=current==='tasks'?`${share}<button class="btn sm" data-manage="dtargets">المستهدفات</button><button class="btn sm" data-manage="staff">الموظفون والزيارات المطلوبة</button><button class="btn sm" data-act="data">البيانات</button><button class="btn sm" data-act="xl">${icon('upload')}استيراد Excel</button><button class="btn primary" data-add="entries">${icon('plus')}تسجيل عمل</button>`:share;
+  $('#actions').innerHTML=current==='tasks'?`${share}<button class="btn sm" data-manage="dtargets">المستهدفات</button><button class="btn sm" data-manage="depts">الإدارات والزيارات المطلوبة</button><button class="btn sm" data-act="data">البيانات</button><button class="btn sm" data-act="xl">${icon('upload')}استيراد Excel</button><button class="btn primary" data-add="entries">${icon('plus')}تسجيل عمل</button>`:share;
   if(current==='analysis'&&!mgrOk()){ $('#actions').innerHTML=''; return viewLock(); }
   if(current==='analysis'&&MANAGER_LOCK) $('#actions').innerHTML+=`<button class="btn sm" data-act="mgr-out">${icon('lock')}خروج</button>`;
   if(current==='assets'||current==='projects') return viewSlot(current);
@@ -652,10 +653,8 @@ function viewSlot(id){
   $('#view').innerHTML=`<iframe class="embed" src="${esc(url)}" title="${esc(VIEWS.find(v=>v.id===id).label)}"></iframe>`;
 }
 
-function filterBar(f,withStaff){
-  const staffOpts=W.staff.filter(s=>!f.dep||s.departmentName===f.dep).sort((a,b)=>byAr(a.name,b.name));
+function filterBar(f){
   return `<div class="filter-bar">
-    ${withStaff?`<label for="w-staff">الموظف</label><select id="w-staff"><option value="">كل الموظفين</option>${staffOpts.map(s=>`<option value="${s.id}" ${s.id===f.staff?'selected':''}>${esc(s.name)}</option>`).join('')}</select>`:''}
     <label for="w-dep">الإدارة</label><select id="w-dep"><option value="">جميع الإدارات</option>${workDepts().map(d=>`<option ${d===f.dep?'selected':''}>${esc(d)}</option>`).join('')}</select>
     <label for="w-period">الفترة</label><select id="w-period">${PERIODS.map(([k,l])=>`<option value="${k}" ${k===f.period?'selected':''}>${l}</option>`).join('')}</select>
     ${f.period==='custom'?`<label for="w-from">من</label><input type="date" id="w-from" value="${esc(periodRange('custom',f).from)}" max="${TODAY}"><label for="w-to">إلى</label><input type="date" id="w-to" value="${esc(periodRange('custom',f).to)}">`:''}
@@ -664,8 +663,8 @@ function filterBar(f,withStaff){
 }
 function bindBar(kind){
   const f=F[kind];
-  const on=(id,k)=>{const el=document.getElementById(id); if(el) el.onchange=e=>{f[k]=e.target.value; if(k==='dep'&&f.staff&&staffById(f.staff)?.departmentName!==f.dep&&f.dep) f.staff=''; render();};};
-  on('w-staff','staff'); on('w-dep','dep'); on('w-period','period'); on('w-from','from'); on('w-to','to');
+  const on=(id,k)=>{const el=document.getElementById(id); if(el) el.onchange=e=>{f[k]=e.target.value;  render();};};
+  on('w-dep','dep'); on('w-period','period'); on('w-from','from'); on('w-to','to');
 }
 
 function targetsPanel(dep,title){
@@ -682,16 +681,14 @@ function targetsPanel(dep,title){
 
 function viewTasks(){
   const f=F.tasks, sc=scope(f);
-  const one=f.staff?staffById(f.staff):null;
-  const rows=sc.E.filter(e=>(!f.type||e.type===f.type)&&(!f.q||[e.description,e.site,staffById(e.staffId)?.name,dtById(e.targetId)?.title].some(x=>String(x||'').includes(f.q)))).sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
+  const rows=sc.E.filter(e=>(!f.type||e.type===f.type)&&(!f.q||[e.description,e.site,e.departmentName,e.by,dtById(e.targetId)?.title].some(x=>String(x||'').includes(f.q)))).sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
   const shown=rows.slice(0,f.all?rows.length:25);
   const buckets={}; const half=W.slaMinutes/2;
   const bl=[`خلال ${fmtDur(half)}`,`${fmtDur(half)} - ${fmtDur(W.slaMinutes)}`,`أكثر من ${fmtDur(W.slaMinutes)}`];
   sc.rts.forEach(v=>{const k=v<=half?bl[0]:v<=W.slaMinutes?bl[1]:bl[2]; buckets[k]=(buckets[k]||0)+1;});
   const linked=sc.E.filter(e=>dtById(e.targetId)).length;
   $('#view').innerHTML=`
-  ${filterBar(f,true)}
-  ${one?`<div class="who">${icon('tasks')}<div><b>${esc(one.name)}</b><span>${esc(one.role||'')} · ${esc(one.departmentName)} · المطلوب منه <span class="num">${one.monthlyVisits}</span> زيارة دورية شهرياً</span></div></div>`:''}
+  ${filterBar(f)}
   <div class="grid stats">
     <div class="stat"><div class="stat-top">الزيارات الدورية<span class="stat-icon">${icon('check')}</span></div><div class="stat-value"><span class="num">${sc.per.length}</span><small>من ${fmt(sc.required,0)} مطلوبة</small></div>${paceBar(sc.per.length,sc.required,sc.expected)}<div class="stat-sub">المتبقي <span class="num">${Math.max(0,sc.required-sc.per.length)}</span> · المتوقع حتى اليوم <span class="num">${sc.expected}</span></div></div>
     ${stat('الزيارات الطارئة',sc.em.length,'alert',`${sc.R.label}`,'زيارة')}
@@ -699,22 +696,22 @@ function viewTasks(){
     ${stat('الأعمال المسجلة',sc.E.length,'tasks',`<span class="num">${pct(linked,sc.E.length)}%</span> مرتبطة بمستهدفات · <span class="num">${sc.tasks.length}</span> مهمة`)}
   </div>
   <div class="grid cols-2 mb">
-    <section class="panel"><div class="panel-head"><h2>الزيارات الدورية: المنجز مقابل المطلوب</h2><span class="hint">${sc.R.label} · الخط الرأسي = المتوقع حتى اليوم</span></div>
-      ${sc.staffRows.length?`<div class="staff-rows">${sc.staffRows.map(r=>`<div class="staff-row"><div class="t-name"><b>${esc(r.s.name)}</b><small>${esc(r.s.role||r.s.departmentName)} · <span class="num">${r.done} من ${r.req}</span></small></div>${paceBar(r.done,r.req,r.exp,r.st==='متأخر'?COLOR.red:r.st==='مكتمل'?COLOR.green:COLOR.blue)}${badge(r.st,V_ST_BADGE[r.st])}</div>`).join('')}</div>`:'<div class="empty">لا يوجد موظفون. أضفهم من زر «الموظفون».</div>'}</section>
+    <section class="panel"><div class="panel-head"><h2>الزيارات الدورية لكل إدارة: المنجز مقابل المطلوب</h2><span class="hint">${sc.R.label} · الخط الرأسي = المتوقع حتى اليوم</span></div>
+      ${sc.staffRows.length?`<div class="staff-rows">${sc.staffRows.map(r=>`<div class="staff-row"><div class="t-name"><b>${esc(r.s.name)}</b><small><span class="num">${r.done} من ${r.req}</span> زيارة</small></div>${paceBar(r.done,r.req,r.exp,r.st==='متأخر'?COLOR.red:r.st==='مكتمل'?COLOR.green:COLOR.blue)}${badge(r.st,V_ST_BADGE[r.st])}</div>`).join('')}</div>`:'<div class="empty">لا توجد إدارات. أضفها من زر «الإدارات والزيارات المطلوبة».</div>'}</section>
     <section class="panel"><div class="panel-head"><h2>الزيارات الطارئة وسرعة الاستجابة</h2><span class="hint">زمن الاستجابة = وقت الوصول − وقت البلاغ</span></div>
       ${sc.rts.length?dist(bl,buckets,{[bl[0]]:COLOR.green,[bl[1]]:COLOR.blue,[bl[2]]:COLOR.red}):''}
-      <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>الموظف</th><th>الطارئة</th><th>متوسط الاستجابة</th><th>ضمن المعيار</th></tr></thead><tbody>
+      <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>الإدارة</th><th>الطارئة</th><th>متوسط الاستجابة</th><th>ضمن المعيار</th></tr></thead><tbody>
       ${sc.staffRows.filter(r=>r.em).length?sc.staffRows.filter(r=>r.em).sort((a,b)=>b.em-a.em).map(r=>`<tr><td>${esc(r.s.name)}</td><td class="num">${r.em}</td><td style="${r.avg>W.slaMinutes?'color:var(--bad);font-weight:600':''}">${fmtDur(r.avg)}</td><td class="num">${r.sla}%</td></tr>`).join(''):'<tr><td colspan="4"><div class="empty">لا توجد زيارات طارئة في هذه الفترة</div></td></tr>'}
       </tbody></table></div></section>
   </div>
-  <div class="mb">${targetsPanel(f.dep||(one&&one.departmentName)||'','مستهدفات الإدارة والمنشأة')}</div>
+  <div class="mb">${targetsPanel(f.dep,'مستهدفات الإدارة والمنشأة')}</div>
   <section class="panel">
     <div class="panel-head"><h2>سجل الأعمال</h2><span class="hint num">${rows.length} عمل · ${sc.R.label}</span></div>
-    <div class="filters"><div class="search">${icon('search')}<input id="fq" placeholder="ابحث في وصف العمل أو الموقع أو الموظف أو المستهدف" value="${esc(f.q)}"></div>${sel('ftype','كل الأنواع',W_TYPES,f.type)}</div>
-    <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>الموظف</th><th>النوع</th><th>وش تم عمله</th><th>المستهدف</th><th>الموقع</th><th>الاستجابة</th><th></th></tr></thead><tbody>
-    ${shown.length?shown.map(e=>{const s=staffById(e.staffId),t=dtById(e.targetId),r=e.type==='زيارة طارئة'?respMin(e):null;
-      return `<tr><td class="muted" style="white-space:nowrap">${fdate(e.date)}</td><td style="white-space:nowrap">${esc(s?s.name:'-')}</td><td>${badge(e.type,TYPE_BADGE[e.type])}${e.status==='قيد العمل'?' '+badge('قيد العمل','b-amber'):''}</td>
-      <td class="desc-cell">${esc(e.description)}${Number(e.qty)>1?` <span class="chip num">×${e.qty}</span>`:''}</td><td>${t?`<span class="chip" data-tip="${esc((otById(t.orgTargetId)||{}).title||'')}">${esc(t.title)}</span>`:'<span class="badge b-amber">غير مرتبط</span>'}</td>
+    <div class="filters"><div class="search">${icon('search')}<input id="fq" placeholder="ابحث في وصف العمل أو الموقع أو الإدارة أو المنفّذ أو المستهدف" value="${esc(f.q)}"></div>${sel('ftype','كل الأنواع',W_TYPES,f.type)}</div>
+    <div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>الإدارة</th><th>النوع</th><th>وش تم عمله</th><th>المستهدف</th><th>الموقع</th><th>الاستجابة</th><th></th></tr></thead><tbody>
+    ${shown.length?shown.map(e=>{const t=dtById(e.targetId),r=e.type==='زيارة طارئة'?respMin(e):null;
+      return `<tr><td class="muted" style="white-space:nowrap">${fdate(e.date)}</td><td class="name-cell"><b style="font-weight:500;white-space:nowrap">${esc(e.departmentName||'-')}</b>${e.by?`<small>${esc(e.by)}</small>`:''}</td><td>${badge(e.type,TYPE_BADGE[e.type])}${e.status==='قيد العمل'?' '+badge('قيد العمل','b-amber'):''}</td>
+      <td class="desc-cell">${esc(e.description)}${Number(e.qty)>1?` <span class="chip num">×${e.qty}</span>`:''}</td><td>${t?`<span class="chip" data-tip="${esc((otById(t.orgTargetId)||{}).title||'')}">${esc(t.title)}</span>`:'<span class="faint">-</span>'}</td>
       <td class="muted">${esc(e.site||'-')}</td><td style="white-space:nowrap;${r!=null&&r>W.slaMinutes?'color:var(--bad);font-weight:600':''}">${r!=null?fmtDur(r):'-'}</td>
       <td><div class="row-actions"><button class="icon-btn" data-edit="entries:${e.id}" title="تعديل" aria-label="تعديل">${icon('edit')}</button><button class="icon-btn del" data-del="entries:${e.id}" title="حذف" aria-label="حذف">${icon('trash')}</button></div></td></tr>`;}).join(''):`<tr><td colspan="8"><div class="empty">لا توجد أعمال مسجلة. اضغط «تسجيل عمل» لإضافة ما أنجزته.</div></td></tr>`}
     </tbody></table></div>
@@ -729,19 +726,19 @@ function viewAnalysis(){
   const f=F.analysis, sc=scope(f);
   const depsList=f.dep?[f.dep]:workDepts();
   const M=depsList.map(d=>{const s=scope({...f,dep:d}); const ts=W.deptTargets.filter(t=>t.departmentName===d);
-    return {d,staff:s.S.length,per:s.per.length,req:s.required,exp:s.expected,em:s.em.length,avg:s.avgResp,sla:s.rts.length?pct(s.inSla,s.rts.length):null,tc:ts.length,tAvg:ts.length?Math.round(ts.reduce((a,t)=>a+Math.min(1,tAch(t)/(Number(t.targetValue)||1)),0)/ts.length*100):null,tLate:ts.filter(t=>tStatus(t)==='متأخر عن المسار').length};});
+    return {d,per:s.per.length,req:s.required,exp:s.expected,em:s.em.length,avg:s.avgResp,sla:s.rts.length?pct(s.inSla,s.rts.length):null,tc:ts.length,tAvg:ts.length?Math.round(ts.reduce((a,t)=>a+Math.min(1,tAch(t)/(Number(t.targetValue)||1)),0)/ts.length*100):null,tLate:ts.filter(t=>tStatus(t)==='متأخر عن المسار').length};});
   const tsAll=W.deptTargets.filter(t=>!f.dep||t.departmentName===f.dep);
   const lateT=tsAll.filter(t=>tStatus(t)==='متأخر عن المسار');
   const avgAch=tsAll.length?Math.round(tsAll.reduce((a,t)=>a+Math.min(1,tAch(t)/(Number(t.targetValue)||1)),0)/tsAll.length*100):0;
   const alerts=[
-    ...sc.staffRows.filter(r=>r.st==='متأخر').map(r=>({lvl:2,ic:'clock',c:COLOR.red,t:r.s.name,s:`زيارات دورية متأخرة · ${r.s.departmentName}`,tag:`${r.done} من ${Math.round(r.exp)} متوقعة`})),
+    ...sc.staffRows.filter(r=>r.st==='متأخر').map(r=>({lvl:2,ic:'clock',c:COLOR.red,t:r.s.name,s:'زيارات دورية متأخرة',tag:`${r.done} من ${Math.round(r.exp)} متوقعة`})),
     ...lateT.map(t=>({lvl:2,ic:'analysis',c:COLOR.red,t:t.title,s:`مستهدف متأخر عن المسار · ${t.departmentName}`,tag:`${Math.round(tAch(t)/(Number(t.targetValue)||1)*100)}% من المستهدف`})),
-    ...sc.em.filter(e=>respMin(e)>W.slaMinutes).sort((a,b)=>respMin(b)-respMin(a)).slice(0,8).map(e=>({lvl:1,ic:'alert',c:COLOR.amber,t:e.description,s:`استجابة طارئة تجاوزت المعيار · ${staffById(e.staffId)?.name||''}`,tag:fmtDur(respMin(e))}))
+    ...sc.em.filter(e=>respMin(e)>W.slaMinutes).sort((a,b)=>respMin(b)-respMin(a)).slice(0,8).map(e=>({lvl:1,ic:'alert',c:COLOR.amber,t:e.description,s:`استجابة طارئة تجاوزت المعيار · ${e.departmentName||''}`,tag:fmtDur(respMin(e))}))
   ];
   const slotTri=(id,ic,color)=>{const url=PAGES[id];return `<div class="tri" style="border-top-color:${color}"><h3>${icon(ic)}${VIEWS.find(v=>v.id===id).label}<button data-view="${id}">فتح القسم ←</button></h3>
     <div class="tri-wait">${icon(url?'link':'clock')}<span>${url?'تحليل المشاريع موجود داخل صفحة الحصر، ويظهر هنا بعد ربطها بجدول بيانات الحصر.':'لا توجد بيانات بعد - القسم بانتظار صفحة الحصر.'}</span></div></div>`;};
   $('#view').innerHTML=`
-  ${filterBar(f,false)}
+  ${filterBar(f)}
   <div class="grid section-tri">
     ${slotTri('assets','assets','var(--primary)')}
     ${slotTri('projects','projects','var(--deep)')}
@@ -758,9 +755,9 @@ function viewAnalysis(){
   <section class="panel mb">
     <div class="panel-head"><h2>الإدارات</h2><span class="hint">${sc.R.label}</span></div>
     <div class="table-wrap"><table class="matrix"><thead>
-      <tr><th rowspan="2">الإدارة</th><th rowspan="2" class="sep">الموظفون</th><th colspan="2" class="sep">الزيارات الدورية</th><th colspan="3" class="sep">الزيارات الطارئة</th><th colspan="2" class="sep">المستهدفات</th></tr>
+      <tr><th rowspan="2">الإدارة</th><th colspan="2" class="sep">الزيارات الدورية</th><th colspan="3" class="sep">الزيارات الطارئة</th><th colspan="2" class="sep">المستهدفات</th></tr>
       <tr><th class="sub sep">المنجز / المطلوب</th><th class="sub">الالتزام</th><th class="sub sep">العدد</th><th class="sub">متوسط الاستجابة</th><th class="sub">ضمن المعيار</th><th class="sub sep">متوسط التحقق</th><th class="sub">متأخرة</th></tr></thead>
-      <tbody>${M.map(r=>`<tr><td><b>${esc(r.d)}</b></td><td class="num sep">${r.staff}</td><td class="num sep">${r.per} / ${r.req}</td><td>${r.req?paceBar(r.per,r.req,r.exp):'<span class="faint">-</span>'}</td>
+      <tbody>${M.map(r=>`<tr><td><b>${esc(r.d)}</b></td><td class="num sep">${r.per} / ${r.req}</td><td>${r.req?paceBar(r.per,r.req,r.exp):'<span class="faint">-</span>'}</td>
         <td class="num sep">${r.em||'-'}</td><td style="${r.avg>W.slaMinutes?'color:var(--bad);font-weight:600':''}">${r.em?fmtDur(r.avg):'-'}</td><td class="num">${r.sla!=null?r.sla+'%':'-'}</td>
         <td class="num sep">${r.tAvg!=null?r.tAvg+'%':'-'}</td><td class="num" style="${r.tLate?'color:var(--bad);font-weight:600':''}">${r.tc?r.tLate:'-'}</td></tr>`).join('')}</tbody></table></div>
   </section>
@@ -783,19 +780,19 @@ const targetOpts=()=>{const g=W.orgTargets.map(o=>({group:o.title,opts:W.deptTar
   const orphan=W.deptTargets.filter(t=>!otById(t.orgTargetId)); if(orphan.length) g.push({group:'غير مرتبط بمستهدف للمنشأة',opts:orphan.map(t=>({v:t.id,l:t.title}))}); return g;};
 const ENT={
   entries:{arr:()=>W.entries,single:'عمل',title:'تسجيل عمل',fields:[
-    {k:'staffId',l:'الموظف',type:'select',opts:()=>W.staff.map(s=>({v:s.id,l:s.name+' - '+s.departmentName})),req:1},
+    {k:'departmentName',l:'الإدارة',type:'select',opts:()=>workDepts().map(d=>({v:d,l:d})),req:1},
+    {k:'by',l:'المنفّذ (اختياري)',ph:'اسم من قام بالعمل'},
     {k:'date',l:'التاريخ',type:'date',req:1},
     {k:'type',l:'نوع العمل',type:'select',opts:()=>W_TYPES.map(x=>({v:x,l:x})),req:1},
     {k:'status',l:'الحالة',type:'select',opts:()=>['منجز','قيد العمل'].map(x=>({v:x,l:x})),req:1},
     {k:'description',l:'وش تم عمله؟',type:'area',req:1,full:1,ph:'اكتب ما أنجزته بشكل مختصر وواضح'},
-    {k:'targetId',l:'المستهدف المرتبط (الإدارة ← المنشأة)',type:'group',opts:targetOpts,req:1,full:1},
+    {k:'targetId',l:'المستهدف المرتبط (اختياري)',type:'group',opts:targetOpts,full:1},
     {k:'site',l:'الموقع / المنشأة',list:'sites'},
     {k:'qty',l:'الكمية المنجزة',type:'num',ph:'1'},
     {k:'reportTime',l:'وقت البلاغ',type:'datetime-local',when:'زيارة طارئة'},
     {k:'arrivalTime',l:'وقت الوصول للموقع',type:'datetime-local',when:'زيارة طارئة'}]},
-  staff:{arr:()=>W.staff,single:'موظف',title:'الموظفون والزيارات المطلوبة',fields:[
-    {k:'name',l:'اسم الموظف',req:1},{k:'role',l:'المسمى الوظيفي'},
-    {k:'departmentName',l:'الإدارة',list:'deps',req:1},{k:'monthlyVisits',l:'الزيارات الدورية المطلوبة شهرياً',type:'num',req:1}]},
+  depts:{arr:()=>W.depts,single:'إدارة',title:'الإدارات والزيارات المطلوبة',fields:[
+    {k:'name',l:'اسم الإدارة',list:'deps',req:1},{k:'monthlyVisits',l:'الزيارات الدورية المطلوبة شهرياً',type:'num',req:1}]},
   dtargets:{arr:()=>W.deptTargets,single:'مستهدف',title:'مستهدفات الإدارات والمنشأة',fields:[
     {k:'title',l:'مستهدف الإدارة',req:1,full:1},
     {k:'orgTargetId',l:'مستهدف المنشأة المرتبط',type:'select',opts:()=>W.orgTargets.map(o=>({v:o.id,l:o.title})),req:1,full:1},
@@ -812,13 +809,13 @@ function validate(kind,o){
     if(o.date>TODAY) e.push('التاريخ لا يكون في المستقبل.');
     if(o.type==='زيارة طارئة'){ if(!o.reportTime||!o.arrivalTime) e.push('الزيارة الطارئة تحتاج وقت البلاغ ووقت الوصول لحساب سرعة الاستجابة.'); else if(Date.parse(o.arrivalTime)<Date.parse(o.reportTime)) e.push('وقت الوصول يسبق وقت البلاغ.'); }
   }
-  if(kind==='staff'&&!(Number(o.monthlyVisits)>=0)) e.push('الزيارات المطلوبة رقم صفر أو أكثر.');
+  if(kind==='depts'){ if(!(Number(o.monthlyVisits)>=0)) e.push('الزيارات المطلوبة رقم صفر أو أكثر.'); if(W.depts.some(d=>d.name===String(o.name).trim()&&d.id!==o.id)) e.push('هذه الإدارة مضافة مسبقاً.'); }
   if(kind==='dtargets'){ if(!(Number(o.targetValue)>0)) e.push('المستهدف السنوي رقم أكبر من صفر.'); if(o.prior!==''&&!(Number(o.prior)>=0)) e.push('المنجز السابق رقم صفر أو أكثر.'); }
   return [...new Set(e)];
 }
 function openForm(kind,id,back){
   const cfg=ENT[kind], rec=id?cfg.arr().find(x=>x.id===id):null, o={...(rec||{})};
-  if(!rec&&kind==='entries'){ o.date=TODAY; o.status='منجز'; o.qty=1; if(F.tasks.staff) o.staffId=F.tasks.staff; }
+  if(!rec&&kind==='entries'){ o.date=TODAY; o.status='منجز'; o.qty=1; if(F.tasks.dep) o.departmentName=F.tasks.dep; }
   const field=f=>{ const v=o[f.k]??''; const idA=`fld-${f.k}`; let inp;
     if(f.type==='select') inp=`<select id="${idA}" name="${f.k}"><option value="">- اختر -</option>${f.opts().map(x=>`<option value="${esc(x.v)}" ${String(x.v)===String(v)?'selected':''}>${esc(x.l)}</option>`).join('')}</select>`;
     else if(f.type==='group') inp=`<select id="${idA}" name="${f.k}"><option value="">- اختر المستهدف -</option>${f.opts().map(g=>`<optgroup label="${esc(g.group)}">${g.opts.map(x=>`<option value="${esc(x.v)}" ${x.v===v?'selected':''}>${esc(x.l)}</option>`).join('')}</optgroup>`).join('')}</select>`;
@@ -833,7 +830,6 @@ function openForm(kind,id,back){
   const sync=()=>{ const t=form.elements.type?form.elements.type.value:''; form.querySelectorAll('[data-when]').forEach(el=>el.hidden=el.dataset.when!==t);
     const pv=$('#resp-preview'); if(pv){ const r=respMin({reportTime:form.elements.reportTime.value,arrivalTime:form.elements.arrivalTime.value}); pv.hidden=!(t==='زيارة طارئة'&&r!=null); if(r!=null) pv.innerHTML=`${icon('clock')} زمن الاستجابة: <b>${fmtDur(r)}</b> ${r<=W.slaMinutes?badge('ضمن المعيار','b-green'):badge('تجاوز المعيار','b-red')}`; } };
   form.addEventListener('input',sync); form.addEventListener('change',sync); sync();
-  if(kind==='entries'&&form.elements.staffId) form.elements.staffId.addEventListener('change',()=>{ const s=staffById(form.elements.staffId.value), tg=form.elements.targetId; if(s&&!tg.value){ const t=W.deptTargets.find(x=>x.departmentName===s.departmentName); if(t) tg.value=t.id; } });
   form.addEventListener('submit',e=>{ e.preventDefault();
     const fd=new FormData(form), n={...(rec||{})};
     for(const f of cfg.fields){ const raw=String(fd.get(f.k)??'').trim(); n[f.k]=f.type==='num'?(raw===''?'':Number(toEn(raw))):raw; }
@@ -842,6 +838,7 @@ function openForm(kind,id,back){
     if(!rec) n.id=uid(kind[0]);
     const errs=validate(kind,n);
     if(errs.length){ $('#form-errors').innerHTML=`<div class="errors" role="alert"><b>يرجى مراجعة ما يلي:</b><ul>${errs.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`; $('#modal-bg').scrollTop=0; return; }
+    if(kind==='depts'&&rec&&rec.name!==n.name&&W.entries.some(e=>e.departmentName===rec.name)){ $('#form-errors').innerHTML='<div class="errors" role="alert">لا يمكن تغيير اسم إدارة لها أعمال مسجلة.</div>'; return; }
     if(rec) Object.assign(rec,n); else cfg.arr().unshift(n);
     const msg=rec?'تم حفظ التعديلات':kind==='entries'?'تم تسجيل العمل':'تمت الإضافة';
     if(back) manage(back); else closeModal();
@@ -850,10 +847,10 @@ function openForm(kind,id,back){
 }
 function manage(kind){
   const cfg=ENT[kind];
-  const row=x=>{ if(kind==='staff') return `<b>${esc(x.name)}</b><small>${esc(x.role||'')} · ${esc(x.departmentName)} · <span class="num">${x.monthlyVisits}</span> زيارة شهرياً</small>`;
+  const row=x=>{ if(kind==='depts') return `<b>${esc(x.name)}</b><small><span class="num">${x.monthlyVisits}</span> زيارة دورية مطلوبة شهرياً</small>`;
     if(kind==='dtargets') return `<b>${esc(x.title)}</b><small>${esc(x.departmentName)} · <span class="num">${fmt(x.targetValue,0)}</span> ${esc(x.unit)} سنوياً · ${esc((otById(x.orgTargetId)||{}).title||'غير مرتبط')}</small>`;
     return `<b>${esc(x.title)}</b><small><span class="num">${W.deptTargets.filter(t=>t.orgTargetId===x.id).length}</span> مستهدف إدارة مرتبط</small>`; };
-  const extra=kind==='staff'?`<div class="field" style="margin-bottom:14px;max-width:320px"><label for="sla">معيار سرعة الاستجابة للزيارات الطارئة (بالدقائق)</label><input id="sla" inputmode="numeric" value="${W.slaMinutes}"></div>`:
+  const extra=kind==='depts'?`<div class="field" style="margin-bottom:14px;max-width:320px"><label for="sla">معيار سرعة الاستجابة للزيارات الطارئة (بالدقائق)</label><input id="sla" inputmode="numeric" value="${W.slaMinutes}"></div>`:
     kind==='dtargets'?`<div class="tabs"><button class="btn sm" data-manage="otargets">${icon('analysis')}مستهدفات المنشأة (${W.orgTargets.length})</button></div>`:
     `<div class="tabs"><button class="btn sm" data-manage="dtargets">← مستهدفات الإدارات</button></div>`;
   openModal(`${head(cfg.title)}<div class="modal-body">${extra}<div class="manage-list">${cfg.arr().length?cfg.arr().map(x=>`<div class="m-row"><div>${row(x)}</div><div class="row-actions"><button class="icon-btn" data-edit="${kind}:${x.id}" aria-label="تعديل">${icon('edit')}</button><button class="icon-btn del" data-del="${kind}:${x.id}" aria-label="حذف">${icon('trash')}</button></div></div>`).join(''):'<div class="empty">لا توجد عناصر بعد</div>'}</div></div>
@@ -864,7 +861,7 @@ function confirmDelete(kind,id){
   const cfg=ENT[kind], rec=cfg.arr().find(x=>x.id===id); if(!rec) return;
   const back=kind==='entries'?'':kind;
   let block='';
-  if(kind==='staff'){const c=W.entries.filter(e=>e.staffId===id).length; if(c) block=`لا يمكن حذف الموظف لأن له ${c} عمل مسجل. احذف أعماله أولاً أو عدّل بياناته.`;}
+  if(kind==='depts'){const c=W.entries.filter(e=>e.departmentName===rec.name).length; if(c) block=`لا يمكن حذف الإدارة لأن لها ${c} عمل مسجل.`;}
   if(kind==='dtargets'){const c=W.entries.filter(e=>e.targetId===id).length; if(c) block=`لا يمكن حذف المستهدف لأن ${c} عمل مرتبط به.`;}
   if(kind==='otargets'){const c=W.deptTargets.filter(t=>t.orgTargetId===id).length; if(c) block=`لا يمكن حذف مستهدف المنشأة لأن ${c} مستهدف إدارة مرتبط به.`;}
   const name=rec.name||rec.title||rec.description;
@@ -875,7 +872,7 @@ function confirmDelete(kind,id){
 
 
 /* ---------- Excel import for the work log ---------- */
-const XL_COLS=[['date','التاريخ'],['staff','اسم الموظف'],['type','نوع العمل'],['status','الحالة'],['description','وش تم عمله'],['target','المستهدف'],['site','الموقع / المنشأة'],['qty','الكمية'],['reportTime','وقت البلاغ (للطارئة)'],['arrivalTime','وقت الوصول (للطارئة)']];
+const XL_COLS=[['date','التاريخ'],['staff','الإدارة'],['by','المنفّذ (اختياري)'],['type','نوع العمل'],['status','الحالة'],['description','وش تم عمله'],['target','المستهدف'],['site','الموقع / المنشأة'],['qty','الكمية'],['reportTime','وقت البلاغ (للطارئة)'],['arrivalTime','وقت الوصول (للطارئة)']];
 let XL_LIB=null;
 function loadExcelLib(){ if(window.ExcelJS) return Promise.resolve(window.ExcelJS); if(XL_LIB) return XL_LIB;
   XL_LIB=new Promise((ok,no)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'; sc.onload=()=>ok(window.ExcelJS); sc.onerror=()=>{XL_LIB=null;no(new Error('تعذر تحميل أداة Excel، تحقق من الاتصال بالإنترنت'));}; document.head.appendChild(sc); }); return XL_LIB; }
@@ -895,23 +892,23 @@ async function downloadTemplate(){
     const X=await loadExcelLib(), wb=new X.Workbook();
     const ws=wb.addWorksheet('الأعمال',{views:[{rightToLeft:true,state:'frozen',ySplit:1}]});
     const L=wb.addWorksheet('القوائم',{views:[{rightToLeft:true}]});
-    const staff=W.staff.map(s=>s.name), targets=W.deptTargets.map(t=>t.title);
-    L.getRow(1).values=['الموظفون','نوع العمل','الحالة','المستهدفات'];
+    const staff=workDepts(), targets=W.deptTargets.map(t=>t.title);
+    L.getRow(1).values=['الإدارات','نوع العمل','الحالة','المستهدفات'];
     const lists=[staff,W_TYPES,['منجز','قيد العمل'],targets];
     lists.forEach((arr,c)=>arr.forEach((v,i)=>{ L.getCell(i+2,c+1).value=v; }));
     L.columns=[{width:28},{width:16},{width:12},{width:50}]; L.getRow(1).font={bold:true};
-    ws.columns=XL_COLS.map(([k,l])=>({header:l,key:k,width:k==='description'?48:k==='target'?42:k.includes('Time')?20:16}));
+    ws.columns=XL_COLS.map(([k,l])=>({header:l,key:k,width:k==='description'?48:k==='target'?42:k==='staff'?28:k.includes('Time')?20:16}));
     ws.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}}; ws.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1976B8'}}; ws.getRow(1).height=22;
     const ref=(c,n)=>`'القوائم'!$${c}$2:$${c}$${Math.max(2,n+1)}`;
     for(let r=2;r<=301;r++){
-      ws.getCell(r,1).numFmt='yyyy-mm-dd'; ws.getCell(r,9).numFmt='yyyy-mm-dd hh:mm'; ws.getCell(r,10).numFmt='yyyy-mm-dd hh:mm';
-      ws.getCell(r,2).dataValidation={type:'list',allowBlank:true,formulae:[ref('A',staff.length)],showErrorMessage:true,errorTitle:'الموظف',error:'اختر الاسم من القائمة'};
-      ws.getCell(r,3).dataValidation={type:'list',allowBlank:true,formulae:[ref('B',W_TYPES.length)],showErrorMessage:true,error:'اختر من القائمة'};
-      ws.getCell(r,4).dataValidation={type:'list',allowBlank:true,formulae:[ref('C',2)]};
-      ws.getCell(r,6).dataValidation={type:'list',allowBlank:true,formulae:[ref('D',targets.length)],showErrorMessage:true,errorTitle:'المستهدف',error:'اختر المستهدف من القائمة'};
+      ws.getCell(r,1).numFmt='yyyy-mm-dd'; ws.getCell(r,10).numFmt='yyyy-mm-dd hh:mm'; ws.getCell(r,11).numFmt='yyyy-mm-dd hh:mm';
+      ws.getCell(r,2).dataValidation={type:'list',allowBlank:true,formulae:[ref('A',staff.length)],showErrorMessage:true,errorTitle:'الإدارة',error:'اختر الإدارة من القائمة'};
+      ws.getCell(r,4).dataValidation={type:'list',allowBlank:true,formulae:[ref('B',W_TYPES.length)],showErrorMessage:true,error:'اختر من القائمة'};
+      ws.getCell(r,5).dataValidation={type:'list',allowBlank:true,formulae:[ref('C',2)]};
+      ws.getCell(r,7).dataValidation={type:'list',allowBlank:true,formulae:[ref('D',targets.length)],showErrorMessage:true,errorTitle:'المستهدف',error:'اختر المستهدف من القائمة'};
     }
     const I=wb.addWorksheet('التعليمات',{views:[{rightToLeft:true}]});
-    ['طريقة التعبئة:','- كل صف = عمل واحد.','- اختر اسم الموظف والنوع والمستهدف من القوائم المنسدلة.','- التاريخ بصيغة 2026-11-18.','- الموقع مطلوب للزيارات الدورية والطارئة.','- للزيارة الطارئة: أدخل وقت البلاغ ووقت الوصول بصيغة 2026-11-18 08:30 لحساب سرعة الاستجابة.','- الكمية اختيارية (الافتراضي 1).','- ارفع الملف من صفحة المهام ← استيراد Excel.'].forEach((t,i)=>{I.getCell(i+1,1).value=t;});
+    ['طريقة التعبئة:','- كل صف = عمل واحد.','- اختر الإدارة ونوع العمل من القوائم المنسدلة. المنفّذ والمستهدف اختياريان.','- التاريخ بصيغة 2026-11-18.','- الموقع مطلوب للزيارات الدورية والطارئة.','- للزيارة الطارئة: أدخل وقت البلاغ ووقت الوصول بصيغة 2026-11-18 08:30 لحساب سرعة الاستجابة.','- الكمية اختيارية (الافتراضي 1).','- ارفع الملف من صفحة المهام ← استيراد Excel.'].forEach((t,i)=>{I.getCell(i+1,1).value=t;});
     I.getColumn(1).width=90; I.getCell(1,1).font={bold:true};
     const buf=await wb.xlsx.writeBuffer();
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})); a.download='قالب-سجل-الأعمال.xlsx'; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
@@ -924,32 +921,32 @@ async function readExcel(file){
   const ws=wb.getWorksheet('الأعمال')||wb.worksheets[0]; if(!ws) throw new Error('الملف لا يحتوي على ورقة');
   const head=ws.getRow(1).values.map(v=>normName(xlText(v)));
   const idx={}; XL_COLS.forEach(([k,l])=>{ const i=head.findIndex(h=>h&&(h===l||l.startsWith(h)||h.startsWith(l.split(' (')[0]))); if(i>0) idx[k]=i; });
-  if(!idx.description||!idx.staff) throw new Error('لم أجد أعمدة «اسم الموظف» و«وش تم عمله». استخدم القالب.');
-  const staffBy=new Map(W.staff.map(s=>[normName(s.name),s])), tgtBy=new Map(W.deptTargets.map(t=>[normName(t.title),t]));
+  if(!idx.description||!idx.staff) throw new Error('لم أجد أعمدة «الإدارة» و«وش تم عمله». استخدم القالب.');
+  const depSet=new Map(workDepts().map(d=>[normName(d),d])), tgtBy=new Map(W.deptTargets.map(t=>[normName(t.title),t]));
   const out=[];
   ws.eachRow({includeEmpty:false},(row,rn)=>{ if(rn===1) return;
     const g=k=>idx[k]?xlText(row.getCell(idx[k]).value):'';
     if(!['staff','description','date','target','type'].some(k=>String(g(k)).trim())) return;
     let type=normName(g('type')); if(type==='دورية') type='زيارة دورية'; if(type==='طارئة') type='زيارة طارئة'; if(!type) type='مهمة';
-    const s=staffBy.get(normName(g('staff'))), t=tgtBy.get(normName(g('target')));
-    const rec={id:uid('e'),date:xlDate(g('date'))||TODAY,staffId:s?s.id:'',type,status:normName(g('status'))||'منجز',description:normName(g('description')),targetId:t?t.id:'',site:normName(g('site')),qty:g('qty')===''?1:Number(toEn(g('qty'))),reportTime:'',arrivalTime:''};
+    const dep=depSet.get(normName(g('staff'))), t=tgtBy.get(normName(g('target')));
+    const rec={id:uid('e'),date:xlDate(g('date'))||TODAY,departmentName:dep||'',by:normName(g('by')),type,status:normName(g('status'))||'منجز',description:normName(g('description')),targetId:t?t.id:'',site:normName(g('site')),qty:g('qty')===''?1:Number(toEn(g('qty'))),reportTime:'',arrivalTime:''};
     if(type==='زيارة طارئة'){ rec.reportTime=xlDate(g('reportTime'),true); rec.arrivalTime=xlDate(g('arrivalTime'),true); }
     const errs=[];
-    if(!s) errs.push(g('staff')?`الموظف «${g('staff')}» غير مسجل في المنصة`:'اسم الموظف فارغ');
-    if(!t) errs.push(g('target')?`المستهدف «${g('target')}» غير موجود`:'المستهدف فارغ');
+    if(!dep) errs.push(g('staff')?`الإدارة «${g('staff')}» غير مسجلة في المنصة`:'الإدارة فارغة');
+    if(!t&&g('target')) errs.push(`المستهدف «${g('target')}» غير موجود`);
     if(rec.date==='invalid') errs.push('التاريخ غير صحيح');
     if(!W_TYPES.includes(type)) errs.push(`نوع العمل «${type}» غير معروف`);
     if(!['منجز','قيد العمل'].includes(rec.status)) errs.push('الحالة: منجز أو قيد العمل');
     if(rec.reportTime==='invalid'||rec.arrivalTime==='invalid') errs.push('وقت البلاغ أو الوصول بصيغة غير صحيحة');
-    if(!errs.length) errs.push(...validate('entries',rec).filter(x=>!/الموظف|المستهدف المرتبط/.test(x)));
+    if(!errs.length) errs.push(...validate('entries',rec).filter(x=>!/^الإدارة:/.test(x)));
     out.push({rn,rec,errs,staffName:g('staff')});
   });
   return out;
 }
 function excelImport(){
-  if(!W.staff.length||!W.deptTargets.length){ openModal(`${head('استيراد من Excel')}<div class="modal-body"><div class="errors">أضف الموظفين والمستهدفات أولاً، لأن القالب يعتمد عليها في القوائم المنسدلة.</div></div><div class="modal-foot"><button class="btn" data-close>إغلاق</button></div>`,true); return; }
+  if(!workDepts().length){ openModal(`${head('استيراد من Excel')}<div class="modal-body"><div class="errors">أضف الإدارات أولاً من زر «الإدارات والزيارات المطلوبة»، لأن القالب يعتمد عليها في القوائم المنسدلة.</div></div><div class="modal-foot"><button class="btn" data-close>إغلاق</button></div>`,true); return; }
   openModal(`${head('استيراد الأعمال من Excel')}<div class="modal-body">
-    <div class="xl-steps"><div><b>١</b><span>حمّل القالب واملأه على جهازك: كل صف عمل واحد، والأسماء والمستهدفات من القوائم المنسدلة.</span><button class="btn sm" id="xl-tpl">${icon('download')}تحميل القالب</button></div>
+    <div class="xl-steps"><div><b>١</b><span>حمّل القالب واملأه على جهازك: كل صف عمل واحد، والإدارة ونوع العمل من القوائم المنسدلة.</span><button class="btn sm" id="xl-tpl">${icon('download')}تحميل القالب</button></div>
     <div><b>٢</b><span>ارفع الملف بعد تعبئته، وراجع النتيجة قبل الإضافة.</span><label class="btn sm primary xl-pick">${icon('upload')}اختيار ملف<input type="file" id="xl-file" accept=".xlsx" hidden></label></div></div>
     <div id="xl-result"></div></div>
     <div class="modal-foot"><button class="btn primary" id="xl-go" hidden></button><button class="btn" data-close>إغلاق</button></div>`);
@@ -959,7 +956,7 @@ function excelImport(){
       if(!rows.length){ box.innerHTML='<div class="errors">الملف لا يحتوي على أعمال.</div>'; return; }
       box.innerHTML=`<div class="xl-sum"><span class="badge b-green">${ok.length} صف جاهز</span>${bad.length?`<span class="badge b-red">${bad.length} صف فيه أخطاء</span>`:''}<span class="faint">${esc(f.name)}</span></div>
         ${bad.length?`<div class="errors"><b>الصفوف التالية لن تُضاف حتى تُصحح:</b><ul>${bad.slice(0,30).map(r=>`<li>صف ${r.rn}: ${esc(r.errs.join(' · '))}</li>`).join('')}${bad.length>30?`<li>و${bad.length-30} صفاً آخر…</li>`:''}</ul></div>`:''}
-        ${ok.length?`<div class="table-wrap" style="max-height:260px;overflow:auto"><table><thead><tr><th>صف</th><th>التاريخ</th><th>الموظف</th><th>النوع</th><th>وش تم عمله</th></tr></thead><tbody>${ok.slice(0,50).map(r=>`<tr><td class="num">${r.rn}</td><td>${fdate(r.rec.date)}</td><td>${esc(staffById(r.rec.staffId).name)}</td><td>${badge(r.rec.type,TYPE_BADGE[r.rec.type])}</td><td>${esc(r.rec.description)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
+        ${ok.length?`<div class="table-wrap" style="max-height:260px;overflow:auto"><table><thead><tr><th>صف</th><th>التاريخ</th><th>الإدارة</th><th>النوع</th><th>وش تم عمله</th></tr></thead><tbody>${ok.slice(0,50).map(r=>`<tr><td class="num">${r.rn}</td><td>${fdate(r.rec.date)}</td><td>${esc(r.rec.departmentName)}</td><td>${badge(r.rec.type,TYPE_BADGE[r.rec.type])}</td><td>${esc(r.rec.description)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
       const go=$('#xl-go'); if(ok.length){ go.hidden=false; go.textContent=`إضافة ${ok.length} عمل`; go.onclick=()=>importRows(ok.map(r=>r.rec)); }
     }catch(err){ box.innerHTML=`<div class="errors">${esc(err.message||err)}</div>`; }
     e.target.value=''; };
@@ -1004,11 +1001,11 @@ function exportData(){
 function importData(){
   openModal(`${head('استيراد بيانات المهام')}<div class="modal-body"><div id="imp-err"></div><p class="muted" style="margin-top:0">الصق النص المنسوخ من قسم المهام أو اختر ملف JSON. يستبدل الاستيراد بيانات المهام الحالية.</p><textarea class="json-box" id="jin"></textarea><input type="file" id="jfile" accept=".json,application/json" style="margin-top:10px"></div><div class="modal-foot"><button class="btn primary" id="doimp">استيراد</button><button class="btn" data-close>إلغاء</button></div>`);
   $('#jfile').onchange=async e=>{const f=e.target.files[0]; if(f) $('#jin').value=await f.text();};
-  $('#doimp').onclick=()=>{ try{ const d=JSON.parse($('#jin').value); if(d.section!=='work'||!Array.isArray(d.entries)||!Array.isArray(d.staff)) throw 0; delete d.section; W=normalize(d); closeModal(); render(); push({action:'replaceAll',data:W},'تم الاستيراد'); }
+  $('#doimp').onclick=()=>{ try{ const d=JSON.parse($('#jin').value); if(d.section!=='work'||!Array.isArray(d.entries)||!Array.isArray(d.depts)) throw 0; delete d.section; W=normalize(d); closeModal(); render(); push({action:'replaceAll',data:W},'تم الاستيراد'); }
     catch(e){ $('#imp-err').innerHTML='<div class="errors" role="alert">النص غير صالح لقسم المهام.</div>'; } };
 }
 function resetData(){
-  openModal(`${head('استعادة البيانات التجريبية')}<div class="modal-body"><p style="margin-top:0">ستُستبدل كل بيانات المهام (الأعمال والموظفون والمستهدفات) بالبيانات التجريبية${SHEET_URL?' <b>في جدول البيانات المشترك لكل المستخدمين</b>':''}.</p></div><div class="modal-foot"><button class="btn danger" id="dores">${icon('reset')}استعادة</button><button class="btn" data-close>إلغاء</button></div>`,true);
+  openModal(`${head('استعادة البيانات التجريبية')}<div class="modal-body"><p style="margin-top:0">ستُستبدل كل بيانات المهام (الأعمال والإدارات والمستهدفات) بالبيانات التجريبية${SHEET_URL?' <b>في جدول البيانات المشترك لكل المستخدمين</b>':''}.</p></div><div class="modal-foot"><button class="btn danger" id="dores">${icon('reset')}استعادة</button><button class="btn" data-close>إلغاء</button></div>`,true);
   $('#dores').onclick=()=>{W=seedWork();closeModal();render();push({action:'replaceAll',data:W},SHEET_URL?'تم رفع البيانات التجريبية إلى الجدول':'تمت الاستعادة');};
 }
 async function copyText(txt,el){ try{await navigator.clipboard.writeText(txt);toast('تم النسخ');}catch(e){ if(el){el.select();} toast('حدّد النص وانسخه يدوياً'); } }

@@ -4,14 +4,14 @@
  * ثم: نشر ← نشر جديد ← تطبيق ويب (التنفيذ: أنا، الوصول: أي شخص).
  *
  * الأوراق تُنشأ تلقائياً عند أول استخدام:
- *   الموظفون · مستهدفات المنشأة · مستهدفات الإدارات · سجل الأعمال · الإعدادات
+ *   الإدارات · مستهدفات المنشأة · مستهدفات الإدارات · سجل أعمال الإدارات · الإعدادات
  */
 
 const SHEETS = {
-  staff: {
-    name: 'الموظفون',
-    cols: ['id', 'name', 'role', 'departmentName', 'monthlyVisits'],
-    heads: ['المعرّف', 'اسم الموظف', 'المسمى الوظيفي', 'الإدارة', 'الزيارات الدورية المطلوبة شهرياً']
+  depts: {
+    name: 'الإدارات',
+    cols: ['id', 'name', 'monthlyVisits'],
+    heads: ['المعرّف', 'الإدارة', 'الزيارات الدورية المطلوبة شهرياً']
   },
   otargets: {
     name: 'مستهدفات المنشأة',
@@ -24,9 +24,9 @@ const SHEETS = {
     heads: ['المعرّف', 'مستهدف الإدارة', 'معرّف مستهدف المنشأة', 'الإدارة', 'وحدة القياس', 'المستهدف السنوي', 'المنجز قبل المنصة']
   },
   entries: {
-    name: 'سجل الأعمال',
-    cols: ['id', 'date', 'staffId', 'staffName', 'type', 'status', 'description', 'targetId', 'targetTitle', 'site', 'qty', 'reportTime', 'arrivalTime', 'responseMinutes', 'updatedAt'],
-    heads: ['المعرّف', 'التاريخ', 'معرّف الموظف', 'الموظف', 'نوع العمل', 'الحالة', 'وش تم عمله', 'معرّف المستهدف', 'المستهدف', 'الموقع / المنشأة', 'الكمية', 'وقت البلاغ', 'وقت الوصول', 'زمن الاستجابة (دقيقة)', 'آخر تحديث']
+    name: 'سجل أعمال الإدارات',
+    cols: ['id', 'date', 'departmentName', 'by', 'type', 'status', 'description', 'targetId', 'targetTitle', 'site', 'qty', 'reportTime', 'arrivalTime', 'responseMinutes', 'updatedAt'],
+    heads: ['المعرّف', 'التاريخ', 'الإدارة', 'المنفّذ', 'نوع العمل', 'الحالة', 'وش تم عمله', 'معرّف المستهدف', 'المستهدف', 'الموقع / المنشأة', 'الكمية', 'وقت البلاغ', 'وقت الوصول', 'زمن الاستجابة (دقيقة)', 'آخر تحديث']
   },
   settings: {
     name: 'الإعدادات',
@@ -74,7 +74,7 @@ function readAll_() {
   const settings = {};
   rows_('settings').forEach(r => settings[r.key] = r.value);
   return {
-    staff: rows_('staff'),
+    depts: rows_('depts'),
     orgTargets: rows_('otargets'),
     deptTargets: rows_('dtargets'),
     entries: rows_('entries').sort((a, b) => String(b.date).localeCompare(String(a.date))),
@@ -85,11 +85,9 @@ function readAll_() {
 // Fills the readable helper columns in the work log
 function enrich_(kind, rec) {
   if (kind !== 'entries') return rec;
-  const staff = rows_('staff').find(s => s.id === rec.staffId);
   const target = rows_('dtargets').find(t => t.id === rec.targetId);
   const a = Date.parse(rec.arrivalTime), r = Date.parse(rec.reportTime);
   return Object.assign({}, rec, {
-    staffName: staff ? staff.name : '',
     targetTitle: target ? target.title : '',
     responseMinutes: isNaN(a) || isNaN(r) ? '' : Math.max(0, Math.round((a - r) / 60000)),
     updatedAt: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm')
@@ -116,20 +114,18 @@ function delete_(kind, id) {
 }
 
 function replaceAll_(data) {
-  const map = { staff: data.staff, otargets: data.orgTargets, dtargets: data.deptTargets, entries: data.entries };
-  // staff and targets first so the work log can show names
-  ['staff', 'otargets', 'dtargets', 'entries'].forEach(kind => {
+  const map = { depts: data.depts, otargets: data.orgTargets, dtargets: data.deptTargets, entries: data.entries };
+  ['depts', 'otargets', 'dtargets', 'entries'].forEach(kind => {
     const def = SHEETS[kind], sh = sheet_(kind);
     if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
     const list = (map[kind] || []);
     if (!list.length) return;
-    const staff = {}, targets = {};
-    (data.staff || []).forEach(s => staff[s.id] = s.name);
+    const targets = {};
     (data.deptTargets || []).forEach(t => targets[t.id] = t.title);
     const rows = list.map(rec => {
       if (kind === 'entries') {
         const a = Date.parse(rec.arrivalTime), r = Date.parse(rec.reportTime);
-        rec = Object.assign({}, rec, { staffName: staff[rec.staffId] || '', targetTitle: targets[rec.targetId] || '', responseMinutes: isNaN(a) || isNaN(r) ? '' : Math.max(0, Math.round((a - r) / 60000)) });
+        rec = Object.assign({}, rec, { targetTitle: targets[rec.targetId] || '', responseMinutes: isNaN(a) || isNaN(r) ? '' : Math.max(0, Math.round((a - r) / 60000)) });
       }
       return def.cols.map(c => text_(rec[c]));
     });
