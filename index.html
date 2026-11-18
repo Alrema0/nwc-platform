@@ -578,7 +578,7 @@ const VIEWS=[
   {id:'assets',label:'الأصول',desc:''},
   {id:'projects',label:'المشاريع',desc:'حصر مشاريع الإدارات - صفحة الحصر المؤسسية كما هي.'},
   {id:'tasks',label:'المهام',desc:'سجل أعمال الموظفين مرتبط بمستهدفات الإدارة والمنشأة، مع الزيارات الدورية والطارئة وسرعة الاستجابة.'},
-  {id:'analysis',label:'لوحة المدير',desc:''}
+  {id:'analysis',label:'لوحة المتابعة التنفيذية',desc:''}
 ];
 let current='home';
 const F={tasks:{period:'month',dep:'',staff:'',q:'',type:''},analysis:{period:'month',dep:''}};
@@ -603,7 +603,7 @@ function viewHome(){
       ${tile('assets',1,'assets','الأصول','حصر أصول الإدارات','قريباً')}
       ${tile('projects',2,'projects','المشاريع','حصر مشاريع الإدارات','صفحة الحصر')}
       ${tile('tasks',3,'tasks','المهام','سجل الأعمال والزيارات',`زيارات الشهر <span class="num">${sc.per.length}/${sc.required}</span>`)}
-      <button class="tile wide" data-view="analysis"><span class="ti">${icon('analysis')}</span><div class="txt"><b>لوحة المدير</b></div><span class="lock-ic">${icon('lock')}</span></button>
+      <button class="tile wide" data-view="analysis"><span class="ti">${icon('analysis')}</span><div class="txt"><b>لوحة المتابعة التنفيذية</b></div><span class="lock-ic">${icon('lock')}</span></button>
     </div>
     <div class="home-foot"><button class="link-btn" data-act="share">مشاركة رابط المنصة</button></div>
   </section>`;
@@ -631,7 +631,7 @@ const MANAGER_PIN_HASH='bada65fb169c57914c7d836655a70882d50c20aac2a25021e244dcae
 function mgrOk(){ try{ return sessionStorage.getItem('nwc-mgr')===MANAGER_PIN_HASH; }catch(e){ return !!window.__mgr; } }
 async function sha256(t){ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
 function viewLock(){
-  $('#view').innerHTML=`<section class="lock-box"><span class="ti">${icon('lock')}</span><h2>لوحة المدير</h2><p class="muted">أدخل رمز الدخول</p>
+  $('#view').innerHTML=`<section class="lock-box"><span class="ti">${icon('lock')}</span><h2>لوحة المتابعة التنفيذية</h2><p class="muted">أدخل رمز الدخول</p>
     <form id="mgr-form"><input id="mgr-pin" type="password" inputmode="numeric" autocomplete="off" aria-label="رمز الدخول"><button class="btn primary" type="submit">دخول</button></form><div id="mgr-err" class="lock-err" role="alert"></div></section>`;
   $('#mgr-pin').focus();
   $('#mgr-form').onsubmit=async e=>{ e.preventDefault(); const h=await sha256('nwc-mgr:'+toEn($('#mgr-pin').value.trim()));
