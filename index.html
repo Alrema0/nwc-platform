@@ -913,11 +913,12 @@ async function downloadTemplate(btn){
   try{
     const X=await loadExcelLib(), wb=new X.Workbook();
     const deps=workDepts(), targets=W.deptTargets.map(t=>t.title);
-    const widths={description:50,target:44,dept:30,site:24,reportTime:20,arrivalTime:20,by:20};
+    const widths={date:14,dept:26,by:18,status:12,description:40,target:32,qty:9,vtype:12,site:22,reportTime:19,arrivalTime:19};
     const make=(def,color)=>{ const ws=wb.addWorksheet(def.name,{views:[{rightToLeft:true,state:'frozen',ySplit:1}],properties:{tabColor:{argb:color}}});
       ws.columns=def.cols.map(([k,l])=>({header:l,key:k,width:widths[k]||14}));
-      const hr=ws.getRow(1); hr.font={bold:true,color:{argb:'FFFFFFFF'}}; hr.fill={type:'pattern',pattern:'solid',fgColor:{argb:color}}; hr.height=22; hr.alignment={vertical:'middle'};
-      def.cols.forEach(([k],ci)=>{ for(let r=2;r<=301;r++){ const c=ws.getCell(r,ci+1);
+      const hr=ws.getRow(1); hr.font={bold:true,color:{argb:'FFFFFFFF'}}; hr.fill={type:'pattern',pattern:'solid',fgColor:{argb:color}}; hr.height=30; hr.alignment={vertical:'middle',horizontal:'center',wrapText:true};
+      const line={style:'thin',color:{argb:'FFD6E1EA'}};
+      def.cols.forEach(([k],ci)=>{ for(let r=2;r<=301;r++){ const c=ws.getCell(r,ci+1); c.border={top:line,bottom:line,left:line,right:line}; c.alignment={vertical:'middle',wrapText:k==='description',horizontal:['date','status','qty','vtype','reportTime','arrivalTime'].includes(k)?'center':'right'};
         if(k==='date') c.numFmt='yyyy-mm-dd'; if(k==='reportTime'||k==='arrivalTime') c.numFmt='yyyy-mm-dd hh:mm';
       } });
       return ws; };
