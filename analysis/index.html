@@ -603,7 +603,7 @@ function viewHome(){
       ${tile('assets',1,'assets','الأصول','حصر أصول الإدارات','قريباً')}
       ${tile('projects',2,'projects','المشاريع','حصر مشاريع الإدارات','صفحة الحصر')}
       ${tile('tasks',3,'tasks','المهام','سجل الأعمال والزيارات',`زيارات الشهر <span class="num">${sc.per.length}/${sc.required}</span>`)}
-      <button class="tile wide" data-view="analysis"><span class="ti">${icon('analysis')}</span><div class="txt"><b>لوحة مؤشرات الأداء</b></div><span class="lock-ic">${icon('lock')}</span></button>
+      <button class="tile wide" data-view="analysis"><span class="ti">${icon('analysis')}</span><div class="txt"><b>لوحة مؤشرات الأداء</b></div>${MANAGER_LOCK?`<span class="lock-ic">${icon('lock')}</span>`:''}</button>
     </div>
     <div class="home-foot"><button class="link-btn" data-act="share">مشاركة رابط المنصة</button></div>
   </section>`;
@@ -620,15 +620,16 @@ function render(){
   const share=`<button class="btn sm" data-act="share">${icon('link')}مشاركة</button>`;
   $('#actions').innerHTML=current==='tasks'?`${share}<button class="btn sm" data-manage="dtargets">المستهدفات</button><button class="btn sm" data-manage="staff">الموظفون والزيارات المطلوبة</button><button class="btn sm" data-act="data">البيانات</button><button class="btn primary" data-add="entries">${icon('plus')}تسجيل عمل</button>`:share;
   if(current==='analysis'&&!mgrOk()){ $('#actions').innerHTML=''; return viewLock(); }
-  if(current==='analysis') $('#actions').innerHTML+=`<button class="btn sm" data-act="mgr-out">${icon('lock')}خروج</button>`;
+  if(current==='analysis'&&MANAGER_LOCK) $('#actions').innerHTML+=`<button class="btn sm" data-act="mgr-out">${icon('lock')}خروج</button>`;
   if(current==='assets'||current==='projects') return viewSlot(current);
   (current==='tasks'?viewTasks:viewAnalysis)();
 }
 
 /* ---------- Manager board lock ----------
    Light protection: the PIN is checked in the browser (stored as a hash, not as text). */
+const MANAGER_LOCK=false; // true = يطلب رمز الدخول
 const MANAGER_PIN_HASH='bada65fb169c57914c7d836655a70882d50c20aac2a25021e244dcaea64d4490';
-function mgrOk(){ try{ return sessionStorage.getItem('nwc-mgr')===MANAGER_PIN_HASH; }catch(e){ return !!window.__mgr; } }
+function mgrOk(){ if(!MANAGER_LOCK) return true; try{ return sessionStorage.getItem('nwc-mgr')===MANAGER_PIN_HASH; }catch(e){ return !!window.__mgr; } }
 async function sha256(t){ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
 function viewLock(){
   $('#view').innerHTML=`<section class="lock-box"><span class="ti">${icon('lock')}</span><h2>لوحة مؤشرات الأداء</h2><p class="muted">أدخل رمز الدخول</p>
