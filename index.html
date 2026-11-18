@@ -477,7 +477,7 @@ function saveWork(){ W.updated=new Date().toISOString(); try{localStorage.setIte
 /* ---------- Google Sheets link ----------
    Put the web-app URL of the tasks spreadsheet (Apps Script) here.
    Empty = the data stays in this browser only (sample data). */
-const SHEET_URL='';
+const SHEET_URL='https://script.google.com/macros/s/AKfycbwl1hM_gQF-Z2twrmJYVJawpiaFVAKiBEcrZjhOkExagikZH3FbINITTtoF7SarM65cBA/exec';
 const SYNC={state:SHEET_URL?'loading':'local',at:null,err:''};
 const EMPTY_W=()=>({staff:[],orgTargets:[],deptTargets:[],entries:[],slaMinutes:120});
 function normalize(d){ const n=o=>{for(const k of ['monthlyVisits','targetValue','prior','qty']) if(k in o&&o[k]!=='') o[k]=Number(o[k]); return o;};
