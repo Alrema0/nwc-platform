@@ -521,7 +521,7 @@ async function push(body,okMsg){
   if(!SHEET_URL){ saveWork(); if(okMsg) toast(okMsg); return; }
   SYNC.state='saving'; syncBadge();
   try{ W=normalize(await sheetCall(body)); cacheSheet(); SYNC.state='ok'; SYNC.at=new Date(); SYNC.err=''; if(okMsg) toast(okMsg); }
-  catch(e){ SYNC.state='error'; SYNC.err=String(e&&e.message||e); toast('تعذر الحفظ في جدول البيانات - أعد المحاولة'); await pull(true); return; }
+  catch(e){ SYNC.state='error'; SYNC.err=String(e&&e.message||e); toast('تعذّر الحفظ في جدول البيانات، يُرجى إعادة المحاولة'); await pull(true); return; }
   if(!$('#modal-bg').classList.contains('open')) render(); else syncBadge(); }
 function syncHTML(){
   if(!SHEET_URL) return `<span class="sync local" data-tip="البيانات محفوظة في هذا المتصفح فقط">● محفوظة في هذا المتصفح</span>`;
@@ -536,7 +536,9 @@ const workDepts=()=>[...new Set([...W.depts.map(d=>d.name),...W.deptTargets.map(
 
 /* ---------- Calculations ---------- */
 const respMin=e=>{const a=Date.parse(e.arrivalTime),r=Date.parse(e.reportTime);return isNaN(a)||isNaN(r)?null:Math.max(0,Math.round((a-r)/6e4));};
-function fmtDur(m){ if(m==null||isNaN(m)) return '-'; m=Math.round(m); if(m<60) return m+' دقيقة'; const h=Math.floor(m/60),r=m%60; return h+' س'+(r?' '+r+' د':''); }
+function fmtDur(m){ if(m==null||isNaN(m)) return '-'; m=Math.round(m); if(m<60) return arM(m); const h=Math.floor(m/60),r=m%60; return arH(h)+(r?' و'+arM(r):''); }
+function arH(h){ return h===1?'ساعة':h===2?'ساعتان':h<=10?h+' ساعات':h+' ساعة'; }
+function arM(m){ return m===1?'دقيقة':m===2?'دقيقتان':m<=10?m+' دقائق':m+' دقيقة'; }
 function periodRange(p,opt){
   const n=new Date(), y=n.getFullYear(), m=n.getMonth(), dim=new Date(y,m+1,0).getDate(), f=n.getDate()/dim;
   const first=(yy,mm)=>isoD(new Date(yy,mm,1)), last=(yy,mm)=>isoD(new Date(yy,mm+1,0));
@@ -634,7 +636,7 @@ function render(){
   $('#crumb').textContent=STANDALONE?'':SYSTEM_NAME+' / '+v.label;
   $('#title').textContent=v.label; $('#desc').textContent=v.desc;
   const share=`<button class="btn sm" data-act="share">${icon('link')}مشاركة</button>`;
-  $('#actions').innerHTML=current==='tasks'?`${share}<button class="btn sm" data-manage="dtargets">المستهدفات</button><button class="btn sm" data-manage="depts">الإدارات والزيارات المطلوبة</button><button class="btn sm" data-act="data">البيانات</button><button class="btn primary" data-add="entries">${icon('plus')}تسجيل عمل</button>`:share;
+  $('#actions').innerHTML=current==='tasks'?`${share}<button class="btn sm" data-manage="dtargets">المستهدفات</button><button class="btn sm" data-manage="depts">الإدارات والزيارات المطلوبة</button><button class="btn sm" data-act="data">إدارة البيانات</button><button class="btn primary" data-add="entries">${icon('plus')}إضافة سجل</button>`:share;
   if(current==='analysis'&&!mgrOk()){ $('#actions').innerHTML=''; return viewLock(); }
   if(current==='analysis'&&MANAGER_LOCK) $('#actions').innerHTML+=`<button class="btn sm" data-act="mgr-out">${icon('lock')}خروج</button>`;
   if(current==='assets'||current==='projects') return viewSlot(current);
@@ -685,7 +687,7 @@ function targetsPanel(dep,title){
     return `<div class="org-group"><div class="org-head">${icon('analysis')}<b>${esc(g.o.title)}</b><span class="faint">مستهدف المنشأة</span><span class="num org-pct">${Math.round(agg*100)}%</span></div>
     ${g.list.map(t=>{const a=tAch(t),st=tStatus(t),inP=W.entries.filter(e=>e.targetId===t.id).length;
       return `<div class="target-row"><div class="t-name"><b>${esc(t.title)}</b><small>${esc(t.departmentName)} · <span class="num">${fmt(a,0)} من ${fmt(t.targetValue,0)}</span> ${esc(t.unit||'')}</small></div>
-      ${paceBar(a,Number(t.targetValue)||0,(Number(t.targetValue)||0)*YFRAC,st==='متأخر عن المسار'?COLOR.red:st==='محقق'?COLOR.green:COLOR.blue)}${badge(st,T_ST_BADGE[st])}</div>`;}).join('')}</div>`;}).join(''):'<div class="empty">لا توجد مستهدفات. أضفها من زر «المستهدفات».</div>'}</section>`;
+      ${paceBar(a,Number(t.targetValue)||0,(Number(t.targetValue)||0)*YFRAC,st==='متأخر عن المسار'?COLOR.red:st==='محقق'?COLOR.green:COLOR.blue)}${badge(st,T_ST_BADGE[st])}</div>`;}).join('')}</div>`;}).join(''):'<div class="empty">لا توجد مستهدفات مضافة، وتُضاف من زر «المستهدفات».</div>'}</section>`;
 }
 
 function viewTasks(){
@@ -695,22 +697,22 @@ function viewTasks(){
   const rows=sc.E.filter(e=>(f.tab==='visits'?isVisit(e):!isVisit(e))&&(!f.q||[e.description,e.site,e.departmentName,e.by,dtById(e.targetId)?.title].some(x=>String(x||'').includes(f.q)))).sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
   const shown=rows.slice(0,f.all?rows.length:25);
   const buckets={}; const half=W.slaMinutes/2;
-  const bl=[`خلال ${fmtDur(half)}`,`${fmtDur(half)} - ${fmtDur(W.slaMinutes)}`,`أكثر من ${fmtDur(W.slaMinutes)}`];
+  const bl=[`حتى ${Math.round(half)} دقيقة`,`من ${Math.round(half)+1} إلى ${W.slaMinutes} دقيقة`,`أكثر من ${W.slaMinutes} دقيقة`];
   sc.rts.forEach(v=>{const k=v<=half?bl[0]:v<=W.slaMinutes?bl[1]:bl[2]; buckets[k]=(buckets[k]||0)+1;});
   const linked=sc.E.filter(e=>dtById(e.targetId)).length;
   $('#view').innerHTML=`
-  <section class="xl-strip"><span class="xl-ic">${icon('download')}</span><div><b>تعبئة الأعمال عبر Excel</b><span>حمّل النموذج وعبّئه على جهازك ثم ارفعه هنا. المهام والأعمال في ورقة، والزيارات في ورقة مستقلة.</span></div>
-    <button class="btn" data-act="xl-tpl-top">${icon('download')}تحميل نموذج Excel</button><button class="btn primary" data-act="xl">${icon('upload')}رفع الملف المعبّأ</button></section>
+  <section class="xl-strip"><span class="xl-ic">${icon('download')}</span><div><b>إدخال البيانات عبر ملف Excel</b><span>يُنزَّل النموذج ويُعبّأ، ثم يُستورد إلى المنصة. يتضمن النموذج ورقة للمهام والأعمال وورقة مستقلة للزيارات.</span></div>
+    <button class="btn" data-act="xl-tpl-top">${icon('download')}تنزيل نموذج Excel</button><button class="btn primary" data-act="xl">${icon('upload')}استيراد ملف</button></section>
   ${filterBar(f)}
   <div class="grid stats">
     <div class="stat"><div class="stat-top">الزيارات الدورية<span class="stat-icon">${icon('check')}</span></div><div class="stat-value"><span class="num">${sc.per.length}</span><small>من ${fmt(sc.required,0)} مطلوبة</small></div>${paceBar(sc.per.length,sc.required,sc.expected)}<div class="stat-sub">المتبقي <span class="num">${Math.max(0,sc.required-sc.per.length)}</span> · المتوقع حتى اليوم <span class="num">${sc.expected}</span></div></div>
     ${stat('الزيارات الطارئة',sc.em.length,'alert',`${sc.R.label}`,'زيارة')}
-    ${stat('متوسط سرعة الاستجابة',`<bdi dir="rtl">${fmtDur(sc.avgResp)}</bdi>`,'clock',sc.rts.length?`<span class="num">${pct(sc.inSla,sc.rts.length)}%</span> خلال ${fmtDur(W.slaMinutes)} (المعيار)`:'لا توجد زيارات طارئة','',sc.rts.length&&pct(sc.inSla,sc.rts.length)<80?'alert':'ok')}
+    ${stat('متوسط سرعة الاستجابة',`<bdi dir="rtl">${fmtDur(sc.avgResp)}</bdi>`,'clock',sc.rts.length?`<span class="num">${pct(sc.inSla,sc.rts.length)}%</span> خلال ${W.slaMinutes} دقيقة (المعيار)`:'لا توجد زيارات طارئة','',sc.rts.length&&pct(sc.inSla,sc.rts.length)<80?'alert':'ok')}
     ${stat('الأعمال المسجلة',sc.E.length,'tasks',`<span class="num">${pct(linked,sc.E.length)}%</span> مرتبطة بمستهدفات · <span class="num">${sc.tasks.length}</span> مهمة`)}
   </div>
   <div class="grid cols-2 mb">
     <section class="panel"><div class="panel-head"><h2>الزيارات الدورية لكل إدارة: المنجز مقابل المطلوب</h2><span class="hint">${sc.R.label} · الخط الرأسي = المتوقع حتى اليوم</span></div>
-      ${sc.staffRows.length?`<div class="staff-rows">${sc.staffRows.map(r=>`<div class="staff-row"><div class="t-name"><b>${esc(r.s.name)}</b><small><span class="num">${r.done} من ${r.req}</span> زيارة</small></div>${paceBar(r.done,r.req,r.exp,r.st==='متأخر'?COLOR.red:r.st==='مكتمل'?COLOR.green:COLOR.blue)}${badge(r.st,V_ST_BADGE[r.st])}</div>`).join('')}</div>`:'<div class="empty">لا توجد إدارات. أضفها من زر «الإدارات والزيارات المطلوبة».</div>'}</section>
+      ${sc.staffRows.length?`<div class="staff-rows">${sc.staffRows.map(r=>`<div class="staff-row"><div class="t-name"><b>${esc(r.s.name)}</b><small><span class="num">${r.done} من ${r.req}</span> زيارة</small></div>${paceBar(r.done,r.req,r.exp,r.st==='متأخر'?COLOR.red:r.st==='مكتمل'?COLOR.green:COLOR.blue)}${badge(r.st,V_ST_BADGE[r.st])}</div>`).join('')}</div>`:'<div class="empty">لا توجد إدارات مضافة، وتُضاف من زر «الإدارات والزيارات المطلوبة».</div>'}</section>
     <section class="panel"><div class="panel-head"><h2>الزيارات الطارئة وسرعة الاستجابة</h2><span class="hint">زمن الاستجابة = وقت الوصول − وقت البلاغ</span></div>
       ${sc.rts.length?dist(bl,buckets,{[bl[0]]:COLOR.green,[bl[1]]:COLOR.blue,[bl[2]]:COLOR.red}):''}
       <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>الإدارة</th><th>الطارئة</th><th>متوسط الاستجابة</th><th>ضمن المعيار</th></tr></thead><tbody>
@@ -752,20 +754,20 @@ function viewAnalysis(){
     ...lateT.map(t=>({lvl:2,ic:'analysis',c:COLOR.red,t:t.title,s:`مستهدف متأخر عن المسار · ${t.departmentName}`,tag:`${Math.round(tAch(t)/(Number(t.targetValue)||1)*100)}% من المستهدف`})),
     ...sc.em.filter(e=>respMin(e)>W.slaMinutes).sort((a,b)=>respMin(b)-respMin(a)).slice(0,8).map(e=>({lvl:1,ic:'alert',c:COLOR.amber,t:e.description,s:`استجابة طارئة تجاوزت المعيار · ${e.departmentName||''}`,tag:fmtDur(respMin(e))}))
   ];
-  const slotTri=(id,ic,color)=>{const url=PAGES[id];return `<div class="tri" style="border-top-color:${color}"><h3>${icon(ic)}${VIEWS.find(v=>v.id===id).label}<button data-view="${id}">فتح القسم ←</button></h3>
-    <div class="tri-wait">${icon(url?'link':'clock')}<span>${url?'تحليل المشاريع موجود داخل صفحة الحصر، ويظهر هنا بعد ربطها بجدول بيانات الحصر.':'لا توجد بيانات بعد - القسم بانتظار صفحة الحصر.'}</span></div></div>`;};
+  const slotTri=(id,ic,color)=>{const url=PAGES[id];return `<div class="tri" style="border-top-color:${color}"><h3>${icon(ic)}${VIEWS.find(v=>v.id===id).label}<button data-view="${id}">الانتقال إلى القسم ←</button></h3>
+    <div class="tri-wait">${icon(url?'link':'clock')}<span>${url?'تحليل المشاريع موجود داخل صفحة الحصر، ويظهر هنا بعد ربطها بجدول بيانات الحصر.':'لا توجد بيانات حتى الآن، والقسم بانتظار صفحة الحصر.'}</span></div></div>`;};
   $('#view').innerHTML=`
   ${filterBar(f)}
   <div class="grid section-tri">
     ${slotTri('assets','assets','var(--primary)')}
     ${slotTri('projects','projects','var(--deep)')}
-    <div class="tri" style="border-top-color:var(--amber)"><h3>${icon('tasks')}المهام<button data-view="tasks">فتح القسم ←</button></h3><div class="tri-nums">
+    <div class="tri" style="border-top-color:var(--amber)"><h3>${icon('tasks')}المهام<button data-view="tasks">الانتقال إلى القسم ←</button></h3><div class="tri-nums">
       <div><b class="num">${sc.per.length}/${sc.required}</b><small>زيارات دورية</small></div><div><b class="num">${sc.em.length}</b><small>زيارات طارئة</small></div><div class="${sc.avgResp>W.slaMinutes?'bad':''}"><b>${fmtDur(sc.avgResp)}</b><small>متوسط الاستجابة</small></div></div></div>
   </div>
   <h2 class="sec-title">${icon('tasks')}تحليل الأعمال والزيارات</h2>
   <div class="insights">
     <div class="insight" data-tip="الزيارات الدورية المنجزة مقسومة على المطلوبة في الفترة"><b class="num">${pct(sc.per.length,sc.required)}%</b><span>الالتزام بالزيارات الدورية (${sc.R.label})</span></div>
-    <div class="insight" data-tip="نسبة الزيارات الطارئة التي وصل فيها الفريق خلال المعيار"><b class="num">${sc.rts.length?pct(sc.inSla,sc.rts.length):0}%</b><span>طارئة خلال ${fmtDur(W.slaMinutes)} · المتوسط ${fmtDur(sc.avgResp)}</span></div>
+    <div class="insight" data-tip="نسبة الزيارات الطارئة التي وصل فيها الفريق خلال المعيار"><b class="num">${sc.rts.length?pct(sc.inSla,sc.rts.length):0}%</b><span>طارئة خلال ${W.slaMinutes} دقيقة · المتوسط ${fmtDur(sc.avgResp)}</span></div>
     <div class="insight" data-tip="متوسط نسبة تحقق مستهدفات الإدارات منذ بداية السنة"><b class="num">${avgAch}%</b><span>متوسط تحقق المستهدفات (المتوقع ${Math.round(YFRAC*100)}%)</span></div>
     <div class="insight" data-tip="مستهدفات منجزها أقل من المتوقع حتى اليوم"><b class="num">${lateT.length}</b><span>مستهدفات متأخرة عن المسار من ${tsAll.length}</span></div>
   </div>
@@ -780,8 +782,8 @@ function viewAnalysis(){
   </section>
   <div class="grid cols-2">
     ${targetsPanel(f.dep,'المستهدفات')}
-    <section class="panel"><div class="panel-head"><h2>تنبيهات تحتاج متابعة</h2><span class="hint num">${alerts.length} تنبيه</span></div>
-      <div class="alerts">${alerts.length?alerts.map(a=>`<div class="alert-item"><span class="dot" style="background:${a.c}1a;color:${a.c}">${icon(a.ic)}</span><div><b>${esc(a.t)}</b><small>${esc(a.s)}</small></div><span class="tag faint">${esc(a.tag)}</span></div>`).join(''):'<div class="empty">لا توجد تنبيهات - كل شيء في مساره</div>'}</div></section>
+    <section class="panel"><div class="panel-head"><h2>تنبيهات تستدعي المتابعة</h2><span class="hint num">${alerts.length} تنبيه</span></div>
+      <div class="alerts">${alerts.length?alerts.map(a=>`<div class="alert-item"><span class="dot" style="background:${a.c}1a;color:${a.c}">${icon(a.ic)}</span><div><b>${esc(a.t)}</b><small>${esc(a.s)}</small></div><span class="tag faint">${esc(a.tag)}</span></div>`).join(''):'<div class="empty">لا توجد تنبيهات</div>'}</div></section>
   </div>`;
   bindBar('analysis');
 }
@@ -798,11 +800,11 @@ const targetOpts=()=>{const g=W.orgTargets.map(o=>({group:o.title,opts:W.deptTar
 const ENT={
   entries:{arr:()=>W.entries,single:'عمل',title:'تسجيل عمل',fields:[
     {k:'departmentName',l:'الإدارة',type:'select',opts:()=>workDepts().map(d=>({v:d,l:d})),req:1},
-    {k:'by',l:'المنفّذ (اختياري)',ph:'اسم من قام بالعمل'},
+    {k:'by',l:'المنفّذ (اختياري)',ph:'اسم القائم بالعمل'},
     {k:'date',l:'التاريخ',type:'date',req:1},
     {k:'type',l:'نوع العمل',type:'select',opts:()=>W_TYPES.map(x=>({v:x,l:x})),req:1},
     {k:'status',l:'الحالة',type:'select',opts:()=>['منجز','قيد العمل'].map(x=>({v:x,l:x})),req:1},
-    {k:'description',l:'وصف العمل المنجز',type:'area',req:1,full:1,ph:'اكتب ما أنجزته بشكل مختصر وواضح'},
+    {k:'description',l:'وصف العمل المنجز',type:'area',req:1,full:1,ph:'وصف مختصر وواضح للعمل المنجز'},
     {k:'targetId',l:'المستهدف المرتبط (اختياري)',type:'group',opts:targetOpts,full:1},
     {k:'site',l:'الموقع / المنشأة',list:'sites'},
     {k:'qty',l:'الكمية المنجزة',type:'num',ph:'1'},
@@ -822,9 +824,9 @@ function validate(kind,o){
   for(const f of ENT[kind].fields) if(f.req&&String(o[f.k]??'').trim()==='') e.push(`${f.l}: يرجى استكمال الحقل.`);
   if(kind==='entries'){
     if(o.qty!==''&&!(Number(o.qty)>0)) e.push('الكمية المنجزة رقم أكبر من صفر.');
-    if(o.type!=='مهمة'&&!String(o.site||'').trim()) e.push('الموقع / المنشأة: مطلوب للزيارات.');
-    if(o.date>TODAY) e.push('التاريخ لا يكون في المستقبل.');
-    if(o.type==='زيارة طارئة'){ if(!o.reportTime||!o.arrivalTime) e.push('الزيارة الطارئة تحتاج وقت البلاغ ووقت الوصول لحساب سرعة الاستجابة.'); else if(Date.parse(o.arrivalTime)<Date.parse(o.reportTime)) e.push('وقت الوصول يسبق وقت البلاغ.'); }
+    if(o.type!=='مهمة'&&!String(o.site||'').trim()) e.push('الموقع / المنشأة: حقل مطلوب للزيارات.');
+    if(o.date>TODAY) e.push('لا يجوز أن يكون التاريخ لاحقاً لتاريخ اليوم.');
+    if(o.type==='زيارة طارئة'){ if(!o.reportTime||!o.arrivalTime) e.push('الزيارة الطارئة تتطلب وقت البلاغ ووقت الوصول لاحتساب سرعة الاستجابة.'); else if(Date.parse(o.arrivalTime)<Date.parse(o.reportTime)) e.push('وقت الوصول يسبق وقت البلاغ.'); }
   }
   if(kind==='depts'){ if(!(Number(o.monthlyVisits)>=0)) e.push('الزيارات المطلوبة رقم صفر أو أكثر.'); if(W.depts.some(d=>d.name===String(o.name).trim()&&d.id!==o.id)) e.push('هذه الإدارة مضافة مسبقاً.'); }
   if(kind==='dtargets'){ if(!(Number(o.targetValue)>0)) e.push('المستهدف السنوي رقم أكبر من صفر.'); if(o.prior!==''&&!(Number(o.prior)>=0)) e.push('المنجز السابق رقم صفر أو أكثر.'); }
@@ -857,7 +859,7 @@ function openForm(kind,id,back){
     if(errs.length){ $('#form-errors').innerHTML=`<div class="errors" role="alert"><b>يرجى مراجعة ما يلي:</b><ul>${errs.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`; $('#modal-bg').scrollTop=0; return; }
     if(kind==='depts'&&rec&&rec.name!==n.name&&W.entries.some(e=>e.departmentName===rec.name)){ $('#form-errors').innerHTML='<div class="errors" role="alert">لا يمكن تغيير اسم إدارة لها أعمال مسجلة.</div>'; return; }
     if(rec) Object.assign(rec,n); else cfg.arr().unshift(n);
-    const msg=rec?'تم حفظ التعديلات':kind==='entries'?'تم تسجيل العمل':'تمت الإضافة';
+    const msg=rec?'تم حفظ التعديلات':kind==='entries'?'تمت إضافة السجل':'تمت الإضافة';
     if(back) manage(back); else closeModal();
     if(SHEET_URL){ render(); push({action:'upsert',kind,record:n},msg); } else { saveWork(); render(); toast(msg); }
   });
@@ -896,7 +898,7 @@ const XL_SHEETS={
 const V_TYPES=['دورية','طارئة'];
 let XL_LIB=null;
 function loadExcelLib(){ if(window.ExcelJS) return Promise.resolve(window.ExcelJS); if(XL_LIB) return XL_LIB;
-  XL_LIB=new Promise((ok,no)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'; sc.onload=()=>ok(window.ExcelJS); sc.onerror=()=>{XL_LIB=null;no(new Error('تعذر تحميل أداة Excel، تحقق من الاتصال بالإنترنت'));}; document.head.appendChild(sc); }); return XL_LIB; }
+  XL_LIB=new Promise((ok,no)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'; sc.onload=()=>ok(window.ExcelJS); sc.onerror=()=>{XL_LIB=null;no(new Error('تعذّر تحميل أداة Excel، يُرجى التحقق من الاتصال بالإنترنت'));}; document.head.appendChild(sc); }); return XL_LIB; }
 const pad2=n=>String(n).padStart(2,'0');
 function xlText(v){ if(v==null) return ''; if(typeof v==='object'){ if(v instanceof Date) return v; if(v.text!=null) return String(v.text); if(v.result!=null) return v.result instanceof Date?v.result:String(v.result); if(v.richText) return v.richText.map(r=>r.text).join(''); } return String(v).trim(); }
 function xlDate(v,withTime){
@@ -933,7 +935,7 @@ async function downloadTemplate(btn){
       for(let r=2;r<=301;r++) ws.getCell(r,ci+1).dataValidation={type:'list',allowBlank:true,formulae:[lists[k][0]],showErrorMessage:true,error:lists[k][1]}; });
     const buf=await wb.xlsx.writeBuffer();
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})); a.download='نموذج-سجل-الأعمال.xlsx'; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
-    toast('تم تحميل النموذج');
+    toast('تم تنزيل النموذج');
   }catch(e){ toast(String(e.message||e)); }
   if(btn) btn.disabled=false;
 }
@@ -954,7 +956,7 @@ async function readExcel(file){
       const rec={id:uid('e'),date:xlDate(g('date'))||TODAY,departmentName:dep||'',by:normName(g('by')),type,status:kind==='tasks'?(normName(g('status'))||'منجز'):'منجز',description:normName(g('description')),targetId:t?t.id:'',site:normName(g('site')),qty:kind==='tasks'&&g('qty')!==''?Number(toEn(g('qty'))):1,reportTime:'',arrivalTime:''};
       if(type==='زيارة طارئة'){ rec.reportTime=xlDate(g('reportTime'),true); rec.arrivalTime=xlDate(g('arrivalTime'),true); }
       const errs=[];
-      if(!dep) errs.push(g('dept')?`الإدارة «${g('dept')}» غير مسجلة في المنصة`:'الإدارة فارغة');
+      if(!dep) errs.push(g('dept')?`الإدارة «${g('dept')}» غير مسجلة في المنصة`:'حقل الإدارة فارغ');
       if(!t&&g('target')) errs.push(`المستهدف «${g('target')}» غير موجود`);
       if(rec.date==='invalid') errs.push('التاريخ غير صحيح');
       if(kind==='visits'&&!type) errs.push('نوع الزيارة: دورية أو طارئة');
@@ -964,24 +966,24 @@ async function readExcel(file){
       out.push({rn,sheet:def.name,rec,errs});
     });
   }
-  if(!found) throw new Error('لم أجد ورقتي «المهام والأعمال» و«الزيارات». استخدم النموذج من زر «تحميل نموذج Excel».');
+  if(!found) throw new Error('تعذّر العثور على ورقتي «المهام والأعمال» و«الزيارات». يُرجى استخدام النموذج المعتمد من زر «تنزيل نموذج Excel».');
   return out;
 }
 function excelImport(){
-  if(!workDepts().length){ openModal(`${head('استيراد من Excel')}<div class="modal-body"><div class="errors">أضف الإدارات أولاً من زر «الإدارات والزيارات المطلوبة»، لأن القالب يعتمد عليها في القوائم المنسدلة.</div></div><div class="modal-foot"><button class="btn" data-close>إغلاق</button></div>`,true); return; }
+  if(!workDepts().length){ openModal(`${head('استيراد من Excel')}<div class="modal-body"><div class="errors">يُرجى إضافة الإدارات أولاً من زر «الإدارات والزيارات المطلوبة»، إذ يعتمد عليها النموذج في القوائم المنسدلة.</div></div><div class="modal-foot"><button class="btn" data-close>إغلاق</button></div>`,true); return; }
   openModal(`${head('استيراد الأعمال من Excel')}<div class="modal-body">
-    <div class="xl-steps"><div><b>١</b><span>حمّل النموذج واملأه على جهازك. فيه ورقتان منفصلتان: «المهام والأعمال» و«الزيارات».</span><button class="btn sm" id="xl-tpl">${icon('download')}تحميل النموذج</button></div>
-    <div><b>٢</b><span>ارفع الملف بعد تعبئته، وراجع النتيجة قبل الإضافة.</span><label class="btn sm primary xl-pick">${icon('upload')}اختيار ملف<input type="file" id="xl-file" accept=".xlsx" hidden></label></div></div>
+    <div class="xl-steps"><div><b>١</b><span>تنزيل النموذج وتعبئته، ويتضمن ورقتين منفصلتين: «المهام والأعمال» و«الزيارات».</span><button class="btn sm" id="xl-tpl">${icon('download')}تنزيل النموذج</button></div>
+    <div><b>٢</b><span>استيراد الملف بعد تعبئته، ومراجعة النتائج قبل الاعتماد.</span><label class="btn sm primary xl-pick">${icon('upload')}اختيار ملف<input type="file" id="xl-file" accept=".xlsx" hidden></label></div></div>
     <div id="xl-result"></div></div>
     <div class="modal-foot"><button class="btn primary" id="xl-go" hidden></button><button class="btn" data-close>إغلاق</button></div>`);
   $('#xl-tpl').onclick=()=>downloadTemplate($('#xl-tpl'));
   $('#xl-file').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; const box=$('#xl-result'); box.innerHTML='<div class="empty">جارٍ قراءة الملف…</div>'; $('#xl-go').hidden=true;
     try{ const rows=await readExcel(f); const ok=rows.filter(r=>!r.errs.length), bad=rows.filter(r=>r.errs.length);
-      if(!rows.length){ box.innerHTML='<div class="errors">الملف لا يحتوي على أعمال.</div>'; return; }
-      box.innerHTML=`<div class="xl-sum"><span class="badge b-green">${ok.length} صف جاهز</span>${bad.length?`<span class="badge b-red">${bad.length} صف فيه أخطاء</span>`:''}<span class="faint">${esc(f.name)}</span></div>
-        ${bad.length?`<div class="errors"><b>الصفوف التالية لن تُضاف حتى تُصحح:</b><ul>${bad.slice(0,30).map(r=>`<li>${esc(r.sheet)} - صف ${r.rn}: ${esc(r.errs.join(' · '))}</li>`).join('')}${bad.length>30?`<li>و${bad.length-30} صفاً آخر…</li>`:''}</ul></div>`:''}
+      if(!rows.length){ box.innerHTML='<div class="errors">لا يتضمن الملف أي سجلات.</div>'; return; }
+      box.innerHTML=`<div class="xl-sum"><span class="badge b-green">${ok.length} سجل صالح</span>${bad.length?`<span class="badge b-red">${bad.length} سجل يتضمن أخطاء</span>`:''}<span class="faint">${esc(f.name)}</span></div>
+        ${bad.length?`<div class="errors"><b>السجلات التالية لن تُضاف إلى حين تصحيحها:</b><ul>${bad.slice(0,30).map(r=>`<li>${esc(r.sheet)} - صف ${r.rn}: ${esc(r.errs.join(' · '))}</li>`).join('')}${bad.length>30?`<li>و${bad.length-30} سجلاً آخر…</li>`:''}</ul></div>`:''}
         ${ok.length?`<div class="table-wrap" style="max-height:260px;overflow:auto"><table><thead><tr><th>الورقة</th><th>صف</th><th>التاريخ</th><th>الإدارة</th><th>النوع</th><th>الوصف</th></tr></thead><tbody>${ok.slice(0,50).map(r=>`<tr><td class="muted">${esc(r.sheet)}</td><td class="num">${r.rn}</td><td>${fdate(r.rec.date)}</td><td>${esc(r.rec.departmentName)}</td><td>${badge(r.rec.type,TYPE_BADGE[r.rec.type])}</td><td>${esc(r.rec.description)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
-      const go=$('#xl-go'); if(ok.length){ go.hidden=false; go.textContent=`إضافة ${ok.length} عمل`; go.onclick=()=>importRows(ok.map(r=>r.rec)); }
+      const go=$('#xl-go'); if(ok.length){ go.hidden=false; go.textContent=`اعتماد السجلات (${ok.length})`; go.onclick=()=>importRows(ok.map(r=>r.rec)); }
     }catch(err){ box.innerHTML=`<div class="errors">${esc(err.message||err)}</div>`; }
     e.target.value=''; };
 }
@@ -992,7 +994,7 @@ async function importRows(recs){
   SYNC.state='saving'; syncBadge();
   try{ W=normalize(await sheetCall({action:'bulkUpsert',kind:'entries',records:recs})); }
   catch(e){
-    if(!/إجراء غير معروف/.test(String(e.message))){ toast('تعذر الحفظ في جدول البيانات - أعد المحاولة'); await pull(true); go.disabled=false; go.textContent='إعادة المحاولة'; return; }
+    if(!/إجراء غير معروف/.test(String(e.message))){ toast('تعذّر الحفظ في جدول البيانات، يُرجى إعادة المحاولة'); await pull(true); go.disabled=false; go.textContent='إعادة المحاولة'; return; }
     // older sheet script without bulk support: send one by one
     for(let i=0;i<recs.length;i++){ go.textContent=`جارٍ الإضافة ${i+1} من ${recs.length}…`; try{ W=normalize(await sheetCall({action:'upsert',kind:'entries',record:recs[i]})); }catch(err){ toast(`توقف عند الصف ${i+1}: ${err.message}`); break; } }
   }
@@ -1008,31 +1010,31 @@ function shareLinks(){
   const line=(label,url,note)=>`<div class="share-row"><div><b>${label}</b><small>${note}</small><input readonly value="${esc(url||'')}" placeholder="لا يوجد رابط بعد" dir="ltr"></div>${url?`<button class="btn sm" data-copy="${esc(url)}">نسخ</button>`:''}</div>`;
   openModal(`${head('مشاركة')}<div class="modal-body">
     ${!http?'<div class="errors" style="background:#f4f8fb;border-color:#d6e1ea;color:#3d5366">الروابط التالية تعمل بعد نشر المنصة على موقعها.</div>':''}
-    ${sec?line('هذا القسم كصفحة منفصلة',sep[sec],'يفتح القسم وحده بدون الواجهة الرئيسية'):''}
+    ${sec?line('هذا القسم كصفحة منفصلة',sep[sec],'يعرض القسم منفرداً دون الواجهة الرئيسية'):''}
     ${line('المنصة كاملة',http?base:'https://alrema0.github.io/nwc-platform/','الواجهة الرئيسية وكل الأقسام')}
     ${sec?'':['assets','projects','tasks','analysis'].map(k=>line('صفحة '+VIEWS.find(v=>v.id===k).label+' منفصلة',k==='tasks'||k==='analysis'?(http?sep[k]:'https://alrema0.github.io/nwc-platform/'+k+'/'):sep[k],'')).join('')}
   </div><div class="modal-foot"><button class="btn" data-close>إغلاق</button></div>`);
 }
 function dataMenu(){
   openModal(`${head('بيانات المهام')}<div class="modal-body"><p class="muted" style="margin-top:0">${SHEET_URL?'بيانات المهام محفوظة في جدول البيانات المشترك، منفصلة عن الأقسام الأخرى.':'بيانات المهام تُحفظ في هذا المتصفح، منفصلة عن الأقسام الأخرى.'}</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="export">نسخ البيانات</button><button class="btn" data-act="import">استيراد</button><button class="btn danger" data-act="reset">${SHEET_URL?'رفع بيانات تجريبية إلى الجدول':'استعادة البيانات التجريبية'}</button></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="export">نسخ البيانات</button><button class="btn" data-act="import">استيراد</button><button class="btn danger" data-act="reset">${SHEET_URL?'إدراج بيانات تجريبية في الجدول':'استعادة البيانات التجريبية'}</button></div></div>
     <div class="modal-foot"><button class="btn" data-close>إغلاق</button></div>`,true);
 }
 function exportData(){
   const json=JSON.stringify({section:'work',...W},null,1);
-  openModal(`${head('نسخ بيانات المهام')}<div class="modal-body"><p class="muted" style="margin-top:0">انسخ النص واحفظه، ثم استخدم «استيراد» في متصفح أو جهاز آخر.</p><textarea class="json-box" readonly id="jbox">${esc(json)}</textarea></div><div class="modal-foot"><button class="btn primary" data-copy-box>نسخ</button><button class="btn" data-close>إغلاق</button></div>`);
+  openModal(`${head('نسخ بيانات المهام')}<div class="modal-body"><p class="muted" style="margin-top:0">يُنسخ النص ويُحفظ، ثم يُستخدم «استيراد» في متصفح أو جهاز آخر.</p><textarea class="json-box" readonly id="jbox">${esc(json)}</textarea></div><div class="modal-foot"><button class="btn primary" data-copy-box>نسخ</button><button class="btn" data-close>إغلاق</button></div>`);
 }
 function importData(){
-  openModal(`${head('استيراد بيانات المهام')}<div class="modal-body"><div id="imp-err"></div><p class="muted" style="margin-top:0">الصق النص المنسوخ من قسم المهام أو اختر ملف JSON. يستبدل الاستيراد بيانات المهام الحالية.</p><textarea class="json-box" id="jin"></textarea><input type="file" id="jfile" accept=".json,application/json" style="margin-top:10px"></div><div class="modal-foot"><button class="btn primary" id="doimp">استيراد</button><button class="btn" data-close>إلغاء</button></div>`);
+  openModal(`${head('استيراد بيانات المهام')}<div class="modal-body"><div id="imp-err"></div><p class="muted" style="margin-top:0">يُلصق النص المنسوخ من قسم المهام أو يُختار ملف JSON. يستبدل الاستيراد بيانات المهام الحالية.</p><textarea class="json-box" id="jin"></textarea><input type="file" id="jfile" accept=".json,application/json" style="margin-top:10px"></div><div class="modal-foot"><button class="btn primary" id="doimp">استيراد</button><button class="btn" data-close>إلغاء</button></div>`);
   $('#jfile').onchange=async e=>{const f=e.target.files[0]; if(f) $('#jin').value=await f.text();};
   $('#doimp').onclick=()=>{ try{ const d=JSON.parse($('#jin').value); if(d.section!=='work'||!Array.isArray(d.entries)||!Array.isArray(d.depts)) throw 0; delete d.section; W=normalize(d); closeModal(); render(); push({action:'replaceAll',data:W},'تم الاستيراد'); }
     catch(e){ $('#imp-err').innerHTML='<div class="errors" role="alert">النص غير صالح لقسم المهام.</div>'; } };
 }
 function resetData(){
   openModal(`${head('استعادة البيانات التجريبية')}<div class="modal-body"><p style="margin-top:0">ستُستبدل كل بيانات المهام (الأعمال والإدارات والمستهدفات) بالبيانات التجريبية${SHEET_URL?' <b>في جدول البيانات المشترك لكل المستخدمين</b>':''}.</p></div><div class="modal-foot"><button class="btn danger" id="dores">${icon('reset')}استعادة</button><button class="btn" data-close>إلغاء</button></div>`,true);
-  $('#dores').onclick=()=>{W=seedWork();closeModal();render();push({action:'replaceAll',data:W},SHEET_URL?'تم رفع البيانات التجريبية إلى الجدول':'تمت الاستعادة');};
+  $('#dores').onclick=()=>{W=seedWork();closeModal();render();push({action:'replaceAll',data:W},SHEET_URL?'تم إدراج البيانات التجريبية في الجدول':'تمت الاستعادة');};
 }
-async function copyText(txt,el){ try{await navigator.clipboard.writeText(txt);toast('تم النسخ');}catch(e){ if(el){el.select();} toast('حدّد النص وانسخه يدوياً'); } }
+async function copyText(txt,el){ try{await navigator.clipboard.writeText(txt);toast('تم النسخ');}catch(e){ if(el){el.select();} toast('يُرجى تحديد النص ونسخه يدوياً'); } }
 
 /* ---------- Events ---------- */
 document.addEventListener('click',e=>{
