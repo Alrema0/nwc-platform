@@ -286,6 +286,11 @@ body.home-mode .tile.wide .txt{justify-content:center}
 .xl-steps span{flex:1;font-size:12.8px;color:#475b6d}
 .xl-pick{cursor:pointer}
 .xl-sum{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.xl-strip{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #cfe3d6;border-right:4px solid #2e7d4f;border-radius:12px;padding:14px 18px;margin-bottom:14px;flex-wrap:wrap}
+.xl-strip .xl-ic{width:42px;height:42px;border-radius:10px;background:#e7f4ec;color:#256b42;display:grid;place-items:center;flex-shrink:0}
+.xl-strip>div{flex:1;min-width:220px}
+.xl-strip b{display:block;color:var(--deep);font-size:14px}
+.xl-strip span{font-size:12.5px;color:var(--muted)}
 /* Modal */
 .modal-bg{position:fixed;inset:0;background:rgba(18,40,60,.38);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:40px 16px;overflow:auto}
 .modal-bg.open{display:flex}
@@ -625,7 +630,7 @@ function render(){
   $('#crumb').textContent=STANDALONE?'':SYSTEM_NAME+' / '+v.label;
   $('#title').textContent=v.label; $('#desc').textContent=v.desc;
   const share=`<button class="btn sm" data-act="share">${icon('link')}مشاركة</button>`;
-  $('#actions').innerHTML=current==='tasks'?`${share}<button class="btn sm" data-manage="dtargets">المستهدفات</button><button class="btn sm" data-manage="depts">الإدارات والزيارات المطلوبة</button><button class="btn sm" data-act="data">البيانات</button><button class="btn sm" data-act="xl">${icon('upload')}استيراد Excel</button><button class="btn primary" data-add="entries">${icon('plus')}تسجيل عمل</button>`:share;
+  $('#actions').innerHTML=current==='tasks'?`${share}<button class="btn sm" data-manage="dtargets">المستهدفات</button><button class="btn sm" data-manage="depts">الإدارات والزيارات المطلوبة</button><button class="btn sm" data-act="data">البيانات</button><button class="btn primary" data-add="entries">${icon('plus')}تسجيل عمل</button>`:share;
   if(current==='analysis'&&!mgrOk()){ $('#actions').innerHTML=''; return viewLock(); }
   if(current==='analysis'&&MANAGER_LOCK) $('#actions').innerHTML+=`<button class="btn sm" data-act="mgr-out">${icon('lock')}خروج</button>`;
   if(current==='assets'||current==='projects') return viewSlot(current);
@@ -688,6 +693,8 @@ function viewTasks(){
   sc.rts.forEach(v=>{const k=v<=half?bl[0]:v<=W.slaMinutes?bl[1]:bl[2]; buckets[k]=(buckets[k]||0)+1;});
   const linked=sc.E.filter(e=>dtById(e.targetId)).length;
   $('#view').innerHTML=`
+  <section class="xl-strip"><span class="xl-ic">${icon('download')}</span><div><b>تعبئة الأعمال عبر Excel</b><span>حمّل النموذج، وعبّه على جهازك، ثم ارفعه هنا. الإدارة ونوع العمل والمستهدف من قوائم منسدلة.</span></div>
+    <button class="btn" data-act="xl-tpl-top">${icon('download')}تحميل نموذج Excel</button><button class="btn primary" data-act="xl">${icon('upload')}رفع الملف المعبّأ</button></section>
   ${filterBar(f)}
   <div class="grid stats">
     <div class="stat"><div class="stat-top">الزيارات الدورية<span class="stat-icon">${icon('check')}</span></div><div class="stat-value"><span class="num">${sc.per.length}</span><small>من ${fmt(sc.required,0)} مطلوبة</small></div>${paceBar(sc.per.length,sc.required,sc.expected)}<div class="stat-sub">المتبقي <span class="num">${Math.max(0,sc.required-sc.per.length)}</span> · المتوقع حتى اليوم <span class="num">${sc.expected}</span></div></div>
@@ -886,8 +893,8 @@ function xlDate(v,withTime){
   const ds=`${y}-${pad2(mo)}-${pad2(d)}`; if(isNaN(Date.parse(ds))) return 'invalid';
   if(!withTime) return ds; if(h==null) return 'invalid'; return `${ds}T${pad2(h)}:${pad2(mi)}`; }
 const normName=x=>String(x||'').replace(/\s+/g,' ').trim();
-async function downloadTemplate(){
-  const btn=$('#xl-tpl'); btn.disabled=true;
+async function downloadTemplate(btn){
+  btn=btn||$('#xl-tpl'); if(btn) btn.disabled=true;
   try{
     const X=await loadExcelLib(), wb=new X.Workbook();
     const ws=wb.addWorksheet('الأعمال',{views:[{rightToLeft:true,state:'frozen',ySplit:1}]});
@@ -911,10 +918,10 @@ async function downloadTemplate(){
     ['طريقة التعبئة:','- كل صف = عمل واحد.','- اختر الإدارة ونوع العمل من القوائم المنسدلة. المنفّذ والمستهدف اختياريان.','- التاريخ بصيغة 2026-11-18.','- الموقع مطلوب للزيارات الدورية والطارئة.','- للزيارة الطارئة: أدخل وقت البلاغ ووقت الوصول بصيغة 2026-11-18 08:30 لحساب سرعة الاستجابة.','- الكمية اختيارية (الافتراضي 1).','- ارفع الملف من صفحة المهام ← استيراد Excel.'].forEach((t,i)=>{I.getCell(i+1,1).value=t;});
     I.getColumn(1).width=90; I.getCell(1,1).font={bold:true};
     const buf=await wb.xlsx.writeBuffer();
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})); a.download='قالب-سجل-الأعمال.xlsx'; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
-    toast('تم تجهيز القالب');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})); a.download='نموذج-سجل-الأعمال.xlsx'; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+    toast('تم تحميل النموذج');
   }catch(e){ toast(String(e.message||e)); }
-  btn.disabled=false;
+  if(btn) btn.disabled=false;
 }
 async function readExcel(file){
   const X=await loadExcelLib(), wb=new X.Workbook(); await wb.xlsx.load(await file.arrayBuffer());
@@ -950,7 +957,7 @@ function excelImport(){
     <div><b>٢</b><span>ارفع الملف بعد تعبئته، وراجع النتيجة قبل الإضافة.</span><label class="btn sm primary xl-pick">${icon('upload')}اختيار ملف<input type="file" id="xl-file" accept=".xlsx" hidden></label></div></div>
     <div id="xl-result"></div></div>
     <div class="modal-foot"><button class="btn primary" id="xl-go" hidden></button><button class="btn" data-close>إغلاق</button></div>`);
-  $('#xl-tpl').onclick=downloadTemplate;
+  $('#xl-tpl').onclick=()=>downloadTemplate($('#xl-tpl'));
   $('#xl-file').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; const box=$('#xl-result'); box.innerHTML='<div class="empty">جارٍ قراءة الملف…</div>'; $('#xl-go').hidden=true;
     try{ const rows=await readExcel(f); const ok=rows.filter(r=>!r.errs.length), bad=rows.filter(r=>r.errs.length);
       if(!rows.length){ box.innerHTML='<div class="errors">الملف لا يحتوي على أعمال.</div>'; return; }
@@ -1021,7 +1028,7 @@ document.addEventListener('click',e=>{
   else if('close' in t.dataset) closeModal();
   else if(t.dataset.copy) copyText(t.dataset.copy,t.parentNode.querySelector('input'));
   else if('copyBox' in t.dataset) copyText($('#jbox').value,$('#jbox'));
-  else { const a=t.dataset.act; if(a==='share') shareLinks(); else if(a==='data') dataMenu(); else if(a==='export') exportData(); else if(a==='import') importData(); else if(a==='reset') resetData(); else if(a==='more'){F.tasks.all=true;render();} else if(a==='refresh') pull(); else if(a==='xl') excelImport(); else if(a==='mgr-out'){ try{sessionStorage.removeItem('nwc-mgr');}catch(_){} window.__mgr=0; go('home'); } }
+  else { const a=t.dataset.act; if(a==='share') shareLinks(); else if(a==='data') dataMenu(); else if(a==='export') exportData(); else if(a==='import') importData(); else if(a==='reset') resetData(); else if(a==='more'){F.tasks.all=true;render();} else if(a==='refresh') pull(); else if(a==='xl') excelImport(); else if(a==='xl-tpl-top') downloadTemplate(t); else if(a==='mgr-out'){ try{sessionStorage.removeItem('nwc-mgr');}catch(_){} window.__mgr=0; go('home'); } }
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('#modal-bg').classList.contains('open')) closeModal(); });
 const tip=$('#tip');
