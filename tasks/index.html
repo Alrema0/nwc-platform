@@ -210,7 +210,7 @@ body.home-mode .appbar,body.home-mode .topbar{display:none}
 .home{min-height:calc(100vh - 90px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px 0}
 .home-logo{width:84px;height:84px;object-fit:contain;margin-bottom:10px}
 .home-org{font-size:13px;color:var(--muted);letter-spacing:.3px}
-.home h1{font-size:34px;margin:6px 0 6px;color:var(--deep)}
+.home h1{font-size:34px;margin:6px 0 34px;color:var(--deep)}
 .home-sub{color:var(--muted);margin:0 0 34px;font-size:14px}
 .tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;width:min(940px,100%)}
 .tile{position:relative;background:#fff;border:1px solid var(--line);border-radius:16px;padding:28px 22px 24px;display:flex;flex-direction:column;align-items:center;gap:8px;transition:transform .15s,box-shadow .15s,border-color .15s;text-align:center}
@@ -552,9 +552,7 @@ function viewHome(){
   const tile=(id,no,ic,title,sub,meta)=>`<button class="tile" data-view="${id}"><span class="no num">0${no}</span><span class="ti">${icon(ic)}</span><div class="txt"><b>${title}</b><span>${sub}</span></div><em class="meta" style="font-style:normal">${meta}</em></button>`;
   $('#view').innerHTML=`<section class="home">
     <img class="home-logo" src="${document.querySelector('.appbar img').src}" alt="شعار شركة المياه الوطنية">
-    <div class="home-org">شركة المياه الوطنية</div>
     <h1>${esc(SYSTEM_NAME)}</h1>
-    <p class="home-sub">${esc(SYSTEM_TAGLINE)}</p>
     <div class="tiles">
       ${tile('assets',1,'assets','الأصول','حصر أصول الإدارات','قريباً')}
       ${tile('projects',2,'projects','المشاريع','حصر مشاريع الإدارات','صفحة الحصر')}
