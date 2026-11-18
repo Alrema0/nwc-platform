@@ -556,12 +556,13 @@ const YFRAC=(()=>{const n=new Date(),s=new Date(n.getFullYear(),0,1),e=new Date(
 function tAch(t){ return (Number(t.prior)||0)+W.entries.filter(e=>e.targetId===t.id&&e.date>=YSTART&&e.date<=TODAY&&e.status!=='قيد العمل').reduce((s,e)=>s+(Number(e.qty)||1),0); }
 function tStatus(t){ const a=tAch(t), v=Number(t.targetValue)||0; if(v&&a>=v) return 'محقق'; if(a>=v*YFRAC*0.95) return 'على المسار'; return 'متأخر عن المسار'; }
 const T_ST_BADGE={'محقق':'b-green','على المسار':'b-blue','متأخر عن المسار':'b-red'};
-const V_ST_BADGE={'مكتمل':'b-green','على المسار':'b-blue','متأخر':'b-red'};
+const V_ST_BADGE={'مكتمل':'b-green','على المسار':'b-blue','متأخر':'b-red','غير محدد':'b-gray'};
 
 // Everything for one scope (period + department + employee)
 function scope(f){
   const R=periodRange(f.period||'month',f);
-  const S=W.depts.filter(d=>!f.dep||d.name===f.dep);
+  const known=new Set(W.depts.map(d=>d.name));
+  const S=[...W.depts,...[...new Set(W.entries.map(e=>e.departmentName).filter(n=>n&&!known.has(n)))].map(n=>({id:'auto-'+n,name:n,monthlyVisits:0}))].filter(d=>!f.dep||d.name===f.dep);
   const E=W.entries.filter(e=>(!f.dep||e.departmentName===f.dep)&&e.date>=R.from&&e.date<=R.to);
   const per=E.filter(e=>e.type==='زيارة دورية'), em=E.filter(e=>e.type==='زيارة طارئة'), tasks=E.filter(e=>e.type==='مهمة');
   const required=Math.round(S.reduce((s,x)=>s+(Number(x.monthlyVisits)||0),0)*R.months), expected=Math.round(required*R.frac);
@@ -569,7 +570,7 @@ function scope(f){
   const inSla=rts.filter(v=>v<=W.slaMinutes).length;
   const staffRows=S.map(s=>{const mine=E.filter(e=>e.departmentName===s.name), done=mine.filter(e=>e.type==='زيارة دورية').length, req=Math.round((Number(s.monthlyVisits)||0)*R.months), exp=req*R.frac;
     const ems=mine.filter(e=>e.type==='زيارة طارئة'), r=ems.map(respMin).filter(v=>v!=null);
-    return {s,done,req,exp,st:req&&done>=req?'مكتمل':done>=exp*0.9?'على المسار':'متأخر',em:ems.length,avg:r.length?r.reduce((a,b)=>a+b,0)/r.length:null,sla:r.length?pct(r.filter(v=>v<=W.slaMinutes).length,r.length):null,entries:mine.length};});
+    return {s,done,req,exp,st:!req?'غير محدد':done>=req?'مكتمل':done>=exp*0.9?'على المسار':'متأخر',em:ems.length,avg:r.length?r.reduce((a,b)=>a+b,0)/r.length:null,sla:r.length?pct(r.filter(v=>v<=W.slaMinutes).length,r.length):null,entries:mine.length};});
   return {R,S,E,per,em,tasks,required,expected,avgResp,inSla,rts,staffRows};
 }
 function paceBar(v,max,pace,color){ const w=max?Math.min(100,v/max*100):0, p=max?Math.min(100,pace/max*100):0;
@@ -712,7 +713,7 @@ function viewTasks(){
   </div>
   <div class="grid cols-2 mb">
     <section class="panel"><div class="panel-head"><h2>الزيارات الدورية لكل إدارة: المنجز مقابل المطلوب</h2><span class="hint">${sc.R.label} · الخط الرأسي = المتوقع حتى اليوم</span></div>
-      ${sc.staffRows.length?`<div class="staff-rows">${sc.staffRows.map(r=>`<div class="staff-row"><div class="t-name"><b>${esc(r.s.name)}</b><small><span class="num">${r.done} من ${r.req}</span> زيارة</small></div>${paceBar(r.done,r.req,r.exp,r.st==='متأخر'?COLOR.red:r.st==='مكتمل'?COLOR.green:COLOR.blue)}${badge(r.st,V_ST_BADGE[r.st])}</div>`).join('')}</div>`:'<div class="empty">لا توجد إدارات مضافة، وتُضاف من زر «الإدارات والزيارات المطلوبة».</div>'}</section>
+      ${sc.staffRows.length?`<div class="staff-rows">${sc.staffRows.map(r=>`<div class="staff-row"><div class="t-name"><b>${esc(r.s.name)}</b><small>${r.req?`<span class="num">${r.done} من ${r.req}</span> زيارة`:`<span class="num">${r.done}</span> زيارة منجزة · لم يُحدَّد المطلوب`}</small></div>${r.req?paceBar(r.done,r.req,r.exp,r.st==='متأخر'?COLOR.red:r.st==='مكتمل'?COLOR.green:COLOR.blue):'<span></span>'}${badge(r.st,V_ST_BADGE[r.st])}</div>`).join('')}</div>`:'<div class="empty">لا توجد إدارات مضافة، وتُضاف من زر «الإدارات والزيارات المطلوبة».</div>'}</section>
     <section class="panel"><div class="panel-head"><h2>الزيارات الطارئة وسرعة الاستجابة</h2><span class="hint">زمن الاستجابة = وقت الوصول − وقت البلاغ</span></div>
       ${sc.rts.length?dist(bl,buckets,{[bl[0]]:COLOR.green,[bl[1]]:COLOR.blue,[bl[2]]:COLOR.red}):''}
       <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>الإدارة</th><th>الطارئة</th><th>متوسط الاستجابة</th><th>ضمن المعيار</th></tr></thead><tbody>
@@ -799,7 +800,7 @@ const targetOpts=()=>{const g=W.orgTargets.map(o=>({group:o.title,opts:W.deptTar
   const orphan=W.deptTargets.filter(t=>!otById(t.orgTargetId)); if(orphan.length) g.push({group:'غير مرتبط بمستهدف للمنشأة',opts:orphan.map(t=>({v:t.id,l:t.title}))}); return g;};
 const ENT={
   entries:{arr:()=>W.entries,single:'عمل',title:'تسجيل عمل',fields:[
-    {k:'departmentName',l:'الإدارة',type:'select',opts:()=>workDepts().map(d=>({v:d,l:d})),req:1},
+    {k:'departmentName',l:'الإدارة',list:'deps',req:1,ph:'اسم الإدارة'},
     {k:'by',l:'المنفّذ (اختياري)',ph:'اسم القائم بالعمل'},
     {k:'date',l:'التاريخ',type:'date',req:1},
     {k:'type',l:'نوع العمل',type:'select',opts:()=>W_TYPES.map(x=>({v:x,l:x})),req:1},
@@ -930,9 +931,9 @@ async function downloadTemplate(btn){
       if(!hidden){ hidden=wb.addWorksheet('lists'); hidden.state='veryHidden'; }
       const col=longLists.push(arr); arr.forEach((v,i)=>{ hidden.getCell(i+1,col).value=v; });
       const L=String.fromCharCode(64+col); return `lists!$${L}$1:$${L}$${Math.max(1,arr.length)}`; };
-    const lists={dept:[listRef(deps),'اختر الإدارة من القائمة'],vtype:[listRef(V_TYPES),'اختر دورية أو طارئة'],status:[listRef(['منجز','قيد العمل']),'اختر منجز أو قيد العمل'],target:[targets.length?listRef(targets):null,'اختر المستهدف من القائمة']};
+    const lists={dept:[deps.length?listRef(deps):null,'',true],vtype:[listRef(V_TYPES),'اختر دورية أو طارئة'],status:[listRef(['منجز','قيد العمل']),'اختر منجز أو قيد العمل'],target:[targets.length?listRef(targets):null,'اختر المستهدف من القائمة']};
     for(const [def,ws] of sheets) def.cols.forEach(([k],ci)=>{ if(!(lists[k]&&lists[k][0])) return;
-      for(let r=2;r<=301;r++) ws.getCell(r,ci+1).dataValidation={type:'list',allowBlank:true,formulae:[lists[k][0]],showErrorMessage:true,error:lists[k][1]}; });
+      for(let r=2;r<=301;r++) ws.getCell(r,ci+1).dataValidation={type:'list',allowBlank:true,formulae:[lists[k][0]],showErrorMessage:!lists[k][2],error:lists[k][1]}; });
     const buf=await wb.xlsx.writeBuffer();
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})); a.download='نموذج-سجل-الأعمال.xlsx'; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
     toast('تم تنزيل النموذج');
@@ -950,13 +951,13 @@ async function readExcel(file){
     ws.eachRow({includeEmpty:false},(row,rn)=>{ if(rn===1) return;
       const g=k=>idx[k]?xlText(row.getCell(idx[k]).value):'';
       if(!def.cols.some(([k])=>String(g(k)).trim())) return;
-      const dep=depSet.get(normName(g('dept'))), t=tgtBy.get(normName(g('target')));
+      const dep=depSet.get(normName(g('dept')))||normName(g('dept')), t=tgtBy.get(normName(g('target')));
       let type='مهمة';
       if(kind==='visits'){ const v=normName(g('vtype')); type=/طار/.test(v)?'زيارة طارئة':/دور/.test(v)?'زيارة دورية':''; }
       const rec={id:uid('e'),date:xlDate(g('date'))||TODAY,departmentName:dep||'',by:normName(g('by')),type,status:kind==='tasks'?(normName(g('status'))||'منجز'):'منجز',description:normName(g('description')),targetId:t?t.id:'',site:normName(g('site')),qty:kind==='tasks'&&g('qty')!==''?Number(toEn(g('qty'))):1,reportTime:'',arrivalTime:''};
       if(type==='زيارة طارئة'){ rec.reportTime=xlDate(g('reportTime'),true); rec.arrivalTime=xlDate(g('arrivalTime'),true); }
       const errs=[];
-      if(!dep) errs.push(g('dept')?`الإدارة «${g('dept')}» غير مسجلة في المنصة`:'حقل الإدارة فارغ');
+      if(!dep) errs.push('حقل الإدارة فارغ');
       if(!t&&g('target')) errs.push(`المستهدف «${g('target')}» غير موجود`);
       if(rec.date==='invalid') errs.push('التاريخ غير صحيح');
       if(kind==='visits'&&!type) errs.push('نوع الزيارة: دورية أو طارئة');
@@ -970,7 +971,6 @@ async function readExcel(file){
   return out;
 }
 function excelImport(){
-  if(!workDepts().length){ openModal(`${head('استيراد من Excel')}<div class="modal-body"><div class="errors">يُرجى إضافة الإدارات أولاً من زر «الإدارات والزيارات المطلوبة»، إذ يعتمد عليها النموذج في القوائم المنسدلة.</div></div><div class="modal-foot"><button class="btn" data-close>إغلاق</button></div>`,true); return; }
   openModal(`${head('استيراد الأعمال من Excel')}<div class="modal-body">
     <div class="xl-steps"><div><b>١</b><span>تنزيل النموذج وتعبئته، ويتضمن ورقتين منفصلتين: «المهام والأعمال» و«الزيارات».</span><button class="btn sm" id="xl-tpl">${icon('download')}تنزيل النموذج</button></div>
     <div><b>٢</b><span>استيراد الملف بعد تعبئته، ومراجعة النتائج قبل الاعتماد.</span><label class="btn sm primary xl-pick">${icon('upload')}اختيار ملف<input type="file" id="xl-file" accept=".xlsx" hidden></label></div></div>
