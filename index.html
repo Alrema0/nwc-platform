@@ -280,6 +280,12 @@ body.standalone .back,body.standalone .tri h3 button{display:none}
 .tile.wide .lock-ic{color:#d6e7f4;display:grid;place-items:center}
 .tile.wide .lock-ic svg{width:18px;height:18px}
 body.home-mode .tile.wide .txt{justify-content:center}
+.xl-steps{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.xl-steps>div{display:flex;align-items:center;gap:12px;background:#f7fafc;border-radius:10px;padding:12px 14px}
+.xl-steps b{width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:grid;place-items:center;flex-shrink:0}
+.xl-steps span{flex:1;font-size:12.8px;color:#475b6d}
+.xl-pick{cursor:pointer}
+.xl-sum{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 /* Modal */
 .modal-bg{position:fixed;inset:0;background:rgba(18,40,60,.38);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:40px 16px;overflow:auto}
 .modal-bg.open{display:flex}
@@ -378,7 +384,7 @@ const numeric=v=>String(v??'').trim()===''?NaN:Number(toEn(v));
 const uid=p=>p+Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-3);
 const pct=(a,b)=>b?Math.round(a/b*100):0;
 
-const ICONS={lock:'M6 11h12v10H6z M8 11V7a4 4 0 0 1 8 0v4',assets:'M3 7l9-4 9 4v10l-9 4-9-4z M3 7l9 4 9-4 M12 11v10',projects:'M3 7V5a1 1 0 0 1 1-1h6l2 3h8a1 1 0 0 1 1 1v11H3z',tasks:'M9 11l3 3 8-8 M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',analysis:'M4 3v17h17 M8 15v-4 M13 15V7 M18 15V4',plus:'M12 5v14 M5 12h14',search:'M21 21l-5-5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',edit:'M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4',trash:'M3 6h18 M8 6V4h8v2 M6 6l1 14h10l1-14',close:'m6 6 12 12 M6 18 18 6',wallet:'M3 6h17v15H3z M3 6V3h15v3 M16 11h5v5h-5z',clock:'M12 6v6l4 2 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',check:'m8 12 3 3 6-7 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',tick:'m5 12 5 5 9-10',wrench:'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z',alert:'M12 9v4 M12 17h.01 M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',link:'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7 M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7',building:'M4 21V4h10v17 M14 10h6v11 M8 8h2 M8 12h2 M8 16h2 M2 21h20',reset:'M3 10a9 9 0 1 1 2 8 M3 4v6h6'};
+const ICONS={upload:'M12 15V3 m-5 5 5-5 5 5 M4 15v6h16v-6',download:'M12 3v12 m-5-5 5 5 5-5 M4 16v5h16v-5',lock:'M6 11h12v10H6z M8 11V7a4 4 0 0 1 8 0v4',assets:'M3 7l9-4 9 4v10l-9 4-9-4z M3 7l9 4 9-4 M12 11v10',projects:'M3 7V5a1 1 0 0 1 1-1h6l2 3h8a1 1 0 0 1 1 1v11H3z',tasks:'M9 11l3 3 8-8 M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',analysis:'M4 3v17h17 M8 15v-4 M13 15V7 M18 15V4',plus:'M12 5v14 M5 12h14',search:'M21 21l-5-5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',edit:'M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4',trash:'M3 6h18 M8 6V4h8v2 M6 6l1 14h10l1-14',close:'m6 6 12 12 M6 18 18 6',wallet:'M3 6h17v15H3z M3 6V3h15v3 M16 11h5v5h-5z',clock:'M12 6v6l4 2 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',check:'m8 12 3 3 6-7 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',tick:'m5 12 5 5 9-10',wrench:'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z',alert:'M12 9v4 M12 17h.01 M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',link:'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7 M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7',building:'M4 21V4h10v17 M14 10h6v11 M8 8h2 M8 12h2 M8 16h2 M2 21h20',reset:'M3 10a9 9 0 1 1 2 8 M3 4v6h6'};
 const icon=n=>`<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICONS[n]||ICONS.projects}"/></svg>`;
 
 /* ---------- Domain ---------- */
@@ -618,7 +624,7 @@ function render(){
   $('#crumb').textContent=STANDALONE?'':SYSTEM_NAME+' / '+v.label;
   $('#title').textContent=v.label; $('#desc').textContent=v.desc;
   const share=`<button class="btn sm" data-act="share">${icon('link')}مشاركة</button>`;
-  $('#actions').innerHTML=current==='tasks'?`${share}<button class="btn sm" data-manage="dtargets">المستهدفات</button><button class="btn sm" data-manage="staff">الموظفون والزيارات المطلوبة</button><button class="btn sm" data-act="data">البيانات</button><button class="btn primary" data-add="entries">${icon('plus')}تسجيل عمل</button>`:share;
+  $('#actions').innerHTML=current==='tasks'?`${share}<button class="btn sm" data-manage="dtargets">المستهدفات</button><button class="btn sm" data-manage="staff">الموظفون والزيارات المطلوبة</button><button class="btn sm" data-act="data">البيانات</button><button class="btn sm" data-act="xl">${icon('upload')}استيراد Excel</button><button class="btn primary" data-add="entries">${icon('plus')}تسجيل عمل</button>`:share;
   if(current==='analysis'&&!mgrOk()){ $('#actions').innerHTML=''; return viewLock(); }
   if(current==='analysis'&&MANAGER_LOCK) $('#actions').innerHTML+=`<button class="btn sm" data-act="mgr-out">${icon('lock')}خروج</button>`;
   if(current==='assets'||current==='projects') return viewSlot(current);
@@ -867,6 +873,111 @@ function confirmDelete(kind,id){
   const b=$('#do-del'); if(b) b.onclick=()=>{ const arr=cfg.arr(); arr.splice(arr.indexOf(rec),1); if(back) manage(back); else closeModal(); render(); push({action:'delete',kind,id},'تم الحذف'); };
 }
 
+
+/* ---------- Excel import for the work log ---------- */
+const XL_COLS=[['date','التاريخ'],['staff','اسم الموظف'],['type','نوع العمل'],['status','الحالة'],['description','وش تم عمله'],['target','المستهدف'],['site','الموقع / المنشأة'],['qty','الكمية'],['reportTime','وقت البلاغ (للطارئة)'],['arrivalTime','وقت الوصول (للطارئة)']];
+let XL_LIB=null;
+function loadExcelLib(){ if(window.ExcelJS) return Promise.resolve(window.ExcelJS); if(XL_LIB) return XL_LIB;
+  XL_LIB=new Promise((ok,no)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'; sc.onload=()=>ok(window.ExcelJS); sc.onerror=()=>{XL_LIB=null;no(new Error('تعذر تحميل أداة Excel، تحقق من الاتصال بالإنترنت'));}; document.head.appendChild(sc); }); return XL_LIB; }
+const pad2=n=>String(n).padStart(2,'0');
+function xlText(v){ if(v==null) return ''; if(typeof v==='object'){ if(v instanceof Date) return v; if(v.text!=null) return String(v.text); if(v.result!=null) return v.result instanceof Date?v.result:String(v.result); if(v.richText) return v.richText.map(r=>r.text).join(''); } return String(v).trim(); }
+function xlDate(v,withTime){
+  if(v instanceof Date){ const d=`${v.getUTCFullYear()}-${pad2(v.getUTCMonth()+1)}-${pad2(v.getUTCDate())}`; return withTime?`${d}T${pad2(v.getUTCHours())}:${pad2(v.getUTCMinutes())}`:d; }
+  let t=toEn(String(v||'').trim()); if(!t) return '';
+  let m=t.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/); let y,mo,d,h,mi;
+  if(m){ [,y,mo,d,h,mi]=m; } else if((m=t.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})(?:[ T](\d{1,2}):(\d{2}))?/))){ [,d,mo,y,h,mi]=m; } else return 'invalid';
+  const ds=`${y}-${pad2(mo)}-${pad2(d)}`; if(isNaN(Date.parse(ds))) return 'invalid';
+  if(!withTime) return ds; if(h==null) return 'invalid'; return `${ds}T${pad2(h)}:${pad2(mi)}`; }
+const normName=x=>String(x||'').replace(/\s+/g,' ').trim();
+async function downloadTemplate(){
+  const btn=$('#xl-tpl'); btn.disabled=true;
+  try{
+    const X=await loadExcelLib(), wb=new X.Workbook();
+    const ws=wb.addWorksheet('الأعمال',{views:[{rightToLeft:true,state:'frozen',ySplit:1}]});
+    const L=wb.addWorksheet('القوائم',{views:[{rightToLeft:true}]});
+    const staff=W.staff.map(s=>s.name), targets=W.deptTargets.map(t=>t.title);
+    L.getRow(1).values=['الموظفون','نوع العمل','الحالة','المستهدفات'];
+    const lists=[staff,W_TYPES,['منجز','قيد العمل'],targets];
+    lists.forEach((arr,c)=>arr.forEach((v,i)=>{ L.getCell(i+2,c+1).value=v; }));
+    L.columns=[{width:28},{width:16},{width:12},{width:50}]; L.getRow(1).font={bold:true};
+    ws.columns=XL_COLS.map(([k,l])=>({header:l,key:k,width:k==='description'?48:k==='target'?42:k.includes('Time')?20:16}));
+    ws.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}}; ws.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1976B8'}}; ws.getRow(1).height=22;
+    const ref=(c,n)=>`'القوائم'!$${c}$2:$${c}$${Math.max(2,n+1)}`;
+    for(let r=2;r<=301;r++){
+      ws.getCell(r,1).numFmt='yyyy-mm-dd'; ws.getCell(r,9).numFmt='yyyy-mm-dd hh:mm'; ws.getCell(r,10).numFmt='yyyy-mm-dd hh:mm';
+      ws.getCell(r,2).dataValidation={type:'list',allowBlank:true,formulae:[ref('A',staff.length)],showErrorMessage:true,errorTitle:'الموظف',error:'اختر الاسم من القائمة'};
+      ws.getCell(r,3).dataValidation={type:'list',allowBlank:true,formulae:[ref('B',W_TYPES.length)],showErrorMessage:true,error:'اختر من القائمة'};
+      ws.getCell(r,4).dataValidation={type:'list',allowBlank:true,formulae:[ref('C',2)]};
+      ws.getCell(r,6).dataValidation={type:'list',allowBlank:true,formulae:[ref('D',targets.length)],showErrorMessage:true,errorTitle:'المستهدف',error:'اختر المستهدف من القائمة'};
+    }
+    const I=wb.addWorksheet('التعليمات',{views:[{rightToLeft:true}]});
+    ['طريقة التعبئة:','- كل صف = عمل واحد.','- اختر اسم الموظف والنوع والمستهدف من القوائم المنسدلة.','- التاريخ بصيغة 2026-11-18.','- الموقع مطلوب للزيارات الدورية والطارئة.','- للزيارة الطارئة: أدخل وقت البلاغ ووقت الوصول بصيغة 2026-11-18 08:30 لحساب سرعة الاستجابة.','- الكمية اختيارية (الافتراضي 1).','- ارفع الملف من صفحة المهام ← استيراد Excel.'].forEach((t,i)=>{I.getCell(i+1,1).value=t;});
+    I.getColumn(1).width=90; I.getCell(1,1).font={bold:true};
+    const buf=await wb.xlsx.writeBuffer();
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})); a.download='قالب-سجل-الأعمال.xlsx'; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+    toast('تم تجهيز القالب');
+  }catch(e){ toast(String(e.message||e)); }
+  btn.disabled=false;
+}
+async function readExcel(file){
+  const X=await loadExcelLib(), wb=new X.Workbook(); await wb.xlsx.load(await file.arrayBuffer());
+  const ws=wb.getWorksheet('الأعمال')||wb.worksheets[0]; if(!ws) throw new Error('الملف لا يحتوي على ورقة');
+  const head=ws.getRow(1).values.map(v=>normName(xlText(v)));
+  const idx={}; XL_COLS.forEach(([k,l])=>{ const i=head.findIndex(h=>h&&(h===l||l.startsWith(h)||h.startsWith(l.split(' (')[0]))); if(i>0) idx[k]=i; });
+  if(!idx.description||!idx.staff) throw new Error('لم أجد أعمدة «اسم الموظف» و«وش تم عمله». استخدم القالب.');
+  const staffBy=new Map(W.staff.map(s=>[normName(s.name),s])), tgtBy=new Map(W.deptTargets.map(t=>[normName(t.title),t]));
+  const out=[];
+  ws.eachRow({includeEmpty:false},(row,rn)=>{ if(rn===1) return;
+    const g=k=>idx[k]?xlText(row.getCell(idx[k]).value):'';
+    if(!['staff','description','date','target','type'].some(k=>String(g(k)).trim())) return;
+    let type=normName(g('type')); if(type==='دورية') type='زيارة دورية'; if(type==='طارئة') type='زيارة طارئة'; if(!type) type='مهمة';
+    const s=staffBy.get(normName(g('staff'))), t=tgtBy.get(normName(g('target')));
+    const rec={id:uid('e'),date:xlDate(g('date'))||TODAY,staffId:s?s.id:'',type,status:normName(g('status'))||'منجز',description:normName(g('description')),targetId:t?t.id:'',site:normName(g('site')),qty:g('qty')===''?1:Number(toEn(g('qty'))),reportTime:'',arrivalTime:''};
+    if(type==='زيارة طارئة'){ rec.reportTime=xlDate(g('reportTime'),true); rec.arrivalTime=xlDate(g('arrivalTime'),true); }
+    const errs=[];
+    if(!s) errs.push(g('staff')?`الموظف «${g('staff')}» غير مسجل في المنصة`:'اسم الموظف فارغ');
+    if(!t) errs.push(g('target')?`المستهدف «${g('target')}» غير موجود`:'المستهدف فارغ');
+    if(rec.date==='invalid') errs.push('التاريخ غير صحيح');
+    if(!W_TYPES.includes(type)) errs.push(`نوع العمل «${type}» غير معروف`);
+    if(!['منجز','قيد العمل'].includes(rec.status)) errs.push('الحالة: منجز أو قيد العمل');
+    if(rec.reportTime==='invalid'||rec.arrivalTime==='invalid') errs.push('وقت البلاغ أو الوصول بصيغة غير صحيحة');
+    if(!errs.length) errs.push(...validate('entries',rec).filter(x=>!/الموظف|المستهدف المرتبط/.test(x)));
+    out.push({rn,rec,errs,staffName:g('staff')});
+  });
+  return out;
+}
+function excelImport(){
+  if(!W.staff.length||!W.deptTargets.length){ openModal(`${head('استيراد من Excel')}<div class="modal-body"><div class="errors">أضف الموظفين والمستهدفات أولاً، لأن القالب يعتمد عليها في القوائم المنسدلة.</div></div><div class="modal-foot"><button class="btn" data-close>إغلاق</button></div>`,true); return; }
+  openModal(`${head('استيراد الأعمال من Excel')}<div class="modal-body">
+    <div class="xl-steps"><div><b>١</b><span>حمّل القالب واملأه على جهازك: كل صف عمل واحد، والأسماء والمستهدفات من القوائم المنسدلة.</span><button class="btn sm" id="xl-tpl">${icon('download')}تحميل القالب</button></div>
+    <div><b>٢</b><span>ارفع الملف بعد تعبئته، وراجع النتيجة قبل الإضافة.</span><label class="btn sm primary xl-pick">${icon('upload')}اختيار ملف<input type="file" id="xl-file" accept=".xlsx" hidden></label></div></div>
+    <div id="xl-result"></div></div>
+    <div class="modal-foot"><button class="btn primary" id="xl-go" hidden></button><button class="btn" data-close>إغلاق</button></div>`);
+  $('#xl-tpl').onclick=downloadTemplate;
+  $('#xl-file').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; const box=$('#xl-result'); box.innerHTML='<div class="empty">جارٍ قراءة الملف…</div>'; $('#xl-go').hidden=true;
+    try{ const rows=await readExcel(f); const ok=rows.filter(r=>!r.errs.length), bad=rows.filter(r=>r.errs.length);
+      if(!rows.length){ box.innerHTML='<div class="errors">الملف لا يحتوي على أعمال.</div>'; return; }
+      box.innerHTML=`<div class="xl-sum"><span class="badge b-green">${ok.length} صف جاهز</span>${bad.length?`<span class="badge b-red">${bad.length} صف فيه أخطاء</span>`:''}<span class="faint">${esc(f.name)}</span></div>
+        ${bad.length?`<div class="errors"><b>الصفوف التالية لن تُضاف حتى تُصحح:</b><ul>${bad.slice(0,30).map(r=>`<li>صف ${r.rn}: ${esc(r.errs.join(' · '))}</li>`).join('')}${bad.length>30?`<li>و${bad.length-30} صفاً آخر…</li>`:''}</ul></div>`:''}
+        ${ok.length?`<div class="table-wrap" style="max-height:260px;overflow:auto"><table><thead><tr><th>صف</th><th>التاريخ</th><th>الموظف</th><th>النوع</th><th>وش تم عمله</th></tr></thead><tbody>${ok.slice(0,50).map(r=>`<tr><td class="num">${r.rn}</td><td>${fdate(r.rec.date)}</td><td>${esc(staffById(r.rec.staffId).name)}</td><td>${badge(r.rec.type,TYPE_BADGE[r.rec.type])}</td><td>${esc(r.rec.description)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
+      const go=$('#xl-go'); if(ok.length){ go.hidden=false; go.textContent=`إضافة ${ok.length} عمل`; go.onclick=()=>importRows(ok.map(r=>r.rec)); }
+    }catch(err){ box.innerHTML=`<div class="errors">${esc(err.message||err)}</div>`; }
+    e.target.value=''; };
+}
+async function importRows(recs){
+  const go=$('#xl-go'); go.disabled=true; go.textContent='جارٍ الإضافة…';
+  W.entries.unshift(...recs);
+  if(!SHEET_URL){ saveWork(); closeModal(); render(); toast(`تمت إضافة ${recs.length} عمل`); return; }
+  SYNC.state='saving'; syncBadge();
+  try{ W=normalize(await sheetCall({action:'bulkUpsert',kind:'entries',records:recs})); }
+  catch(e){
+    if(!/إجراء غير معروف/.test(String(e.message))){ toast('تعذر الحفظ في جدول البيانات - أعد المحاولة'); await pull(true); go.disabled=false; go.textContent='إعادة المحاولة'; return; }
+    // older sheet script without bulk support: send one by one
+    for(let i=0;i<recs.length;i++){ go.textContent=`جارٍ الإضافة ${i+1} من ${recs.length}…`; try{ W=normalize(await sheetCall({action:'upsert',kind:'entries',record:recs[i]})); }catch(err){ toast(`توقف عند الصف ${i+1}: ${err.message}`); break; } }
+  }
+  cacheSheet(); SYNC.state='ok'; SYNC.at=new Date(); closeModal(); render(); toast(`تمت إضافة ${recs.length} عمل إلى الجدول`);
+}
+
 /* ---------- Share & data ---------- */
 function platformBase(){ try{ return new URL(STANDALONE?'../':'./',location.href).href.split('#')[0]; }catch(e){ return ''; } }
 function shareLinks(){
@@ -913,7 +1024,7 @@ document.addEventListener('click',e=>{
   else if('close' in t.dataset) closeModal();
   else if(t.dataset.copy) copyText(t.dataset.copy,t.parentNode.querySelector('input'));
   else if('copyBox' in t.dataset) copyText($('#jbox').value,$('#jbox'));
-  else { const a=t.dataset.act; if(a==='share') shareLinks(); else if(a==='data') dataMenu(); else if(a==='export') exportData(); else if(a==='import') importData(); else if(a==='reset') resetData(); else if(a==='more'){F.tasks.all=true;render();} else if(a==='refresh') pull(); else if(a==='mgr-out'){ try{sessionStorage.removeItem('nwc-mgr');}catch(_){} window.__mgr=0; go('home'); } }
+  else { const a=t.dataset.act; if(a==='share') shareLinks(); else if(a==='data') dataMenu(); else if(a==='export') exportData(); else if(a==='import') importData(); else if(a==='reset') resetData(); else if(a==='more'){F.tasks.all=true;render();} else if(a==='refresh') pull(); else if(a==='xl') excelImport(); else if(a==='mgr-out'){ try{sessionStorage.removeItem('nwc-mgr');}catch(_){} window.__mgr=0; go('home'); } }
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('#modal-bg').classList.contains('open')) closeModal(); });
 const tip=$('#tip');

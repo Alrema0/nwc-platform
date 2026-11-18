@@ -163,6 +163,7 @@ function doPost(e) {
     if (!SHEETS[body.kind] && ['replaceAll', 'setting'].indexOf(body.action) < 0) throw new Error('نوع غير معروف');
     if (body.action === 'upsert') upsert_(body.kind, body.record);
     else if (body.action === 'delete') delete_(body.kind, body.id);
+    else if (body.action === 'bulkUpsert') (body.records || []).forEach(r => upsert_(body.kind, r));
     else if (body.action === 'replaceAll') replaceAll_(body.data);
     else if (body.action === 'setting') setSetting_(body.key, body.value);
     else throw new Error('إجراء غير معروف');
