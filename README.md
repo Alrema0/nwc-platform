@@ -24,7 +24,7 @@ analysis/index.html   ← صفحة التحليل الشامل وحدها
 | حصر المشاريع وحده | `https://alrema0.github.io/project-inventory/` |
 | المهام وحدها | `https://alrema0.github.io/nwc-platform/tasks/` |
 | لوحة مؤشرات الأداء وحدها | `https://alrema0.github.io/nwc-platform/analysis/` |
-| حصر الأصول (لاحقاً) | رابط صفحته بعد نشرها |
+| تسجيل الأصول وحده | `https://alrema0.github.io/index/` |
 
 ## إضافة صفحة حصر الأصول لاحقاً
 

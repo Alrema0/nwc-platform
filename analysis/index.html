@@ -428,10 +428,10 @@ const badge=(txt,cls)=>`<span class="badge ${cls||''}">${esc(txt)}</span>`;
 
 /* ---------- Section pages you add yourself ----------
    Projects: your ready inventory page, shown inside the platform.
-   Assets: left empty on purpose - put the asset inventory page URL here later. */
+   Assets: the asset registration page (repo Alrema0/index). */
 const PAGES={
   projects:'https://alrema0.github.io/project-inventory/',
-  assets:''
+  assets:'https://alrema0.github.io/index/'
 };
 
 /* ---------- Work log (tasks page): own storage key ---------- */
@@ -619,7 +619,7 @@ function viewHome(){
     <img class="home-logo" src="${document.querySelector('.appbar img').src}" alt="شعار شركة المياه الوطنية">
     <h1>${esc(SYSTEM_NAME)}</h1>
     <div class="tiles">
-      ${tile('assets',1,'assets','الأصول','حصر أصول الإدارات','قريباً')}
+      ${tile('assets',1,'assets','الأصول','حصر أصول الإدارات','صفحة التسجيل')}
       ${tile('projects',2,'projects','المشاريع','حصر مشاريع الإدارات','صفحة الحصر')}
       ${tile('tasks',3,'tasks','المهام','سجل الأعمال والزيارات',`زيارات الشهر <span class="num">${sc.per.length}/${sc.required}</span>`)}
       <button class="tile wide" data-view="analysis"><span class="ti">${icon('analysis')}</span><div class="txt"><b>لوحة مؤشرات الأداء</b></div>${MANAGER_LOCK?`<span class="lock-ic">${icon('lock')}</span>`:''}</button>
@@ -756,7 +756,7 @@ function viewAnalysis(){
     ...sc.em.filter(e=>respMin(e)>W.slaMinutes).sort((a,b)=>respMin(b)-respMin(a)).slice(0,8).map(e=>({lvl:1,ic:'alert',c:COLOR.amber,t:e.description,s:`استجابة طارئة تجاوزت المعيار · ${e.departmentName||''}`,tag:fmtDur(respMin(e))}))
   ];
   const slotTri=(id,ic,color)=>{const url=PAGES[id];return `<div class="tri" style="border-top-color:${color}"><h3>${icon(ic)}${VIEWS.find(v=>v.id===id).label}<button data-view="${id}">الانتقال إلى القسم ←</button></h3>
-    <div class="tri-wait">${icon(url?'link':'clock')}<span>${url?'تحليل المشاريع موجود داخل صفحة الحصر، ويظهر هنا بعد ربطها بجدول بيانات الحصر.':'لا توجد بيانات حتى الآن، والقسم بانتظار صفحة الحصر.'}</span></div></div>`;};
+    <div class="tri-wait">${icon(url?'link':'clock')}<span>${url?(id==='assets'?'سجل الأصول وأرقامها موجودة داخل صفحة تسجيل الأصول.':'تحليل المشاريع موجود داخل صفحة الحصر، ويظهر هنا بعد ربطها بجدول بيانات الحصر.'):'لا توجد بيانات حتى الآن، والقسم بانتظار صفحة الحصر.'}</span></div></div>`;};
   $('#view').innerHTML=`
   ${filterBar(f)}
   <div class="grid section-tri">
