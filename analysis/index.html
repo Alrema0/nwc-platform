@@ -211,6 +211,19 @@ body:not(.home-mode) main{max-width:none!important}
 .appbar-act{margin-right:auto;display:flex;align-items:center;gap:8px}
 .appbar-act .back{margin-right:0}
 #share-slot:empty{display:none}
+/* Brand line under the top bar (same as the assets page) */
+main{--px:30px}
+body.embed-mode main{--px:24px}
+@media (max-width:900px){main,body.embed-mode main{--px:14px}}
+.appbar{position:relative;border-bottom:0!important;margin-inline:calc(-1*var(--px));padding-inline:var(--px)}
+.appbar::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:linear-gradient(90deg,#04a999,#1272b0)}
+/* Compact page title */
+.topbar{margin-bottom:12px!important;gap:12px;align-items:center}
+.topbar .crumb{font-size:11px;margin-bottom:0}
+.topbar h1{font-size:19px!important;margin:0!important;line-height:1.35}
+.topbar p{font-size:12.5px;margin:1px 0 0!important}
+body.embed-mode .topbar .crumb,body.embed-mode .topbar p{display:none}
+body.embed-mode .topbar{margin-bottom:8px!important}
 /* Assets & Projects: full-page view inside the platform */
 body.embed-mode{overflow:hidden}
 body.embed-mode main{max-width:none!important;height:100vh;height:100dvh;min-height:0;display:flex;flex-direction:column;padding:16px 24px 0!important}
@@ -441,8 +454,8 @@ const badge=(txt,cls)=>`<span class="badge ${cls||''}">${esc(txt)}</span>`;
    Projects: your ready inventory page, shown inside the platform.
    Assets: the asset registration page (repo Alrema0/index). */
 const PAGES={
-  projects:'https://alrema0.github.io/project-inventory/?v=2',
-  assets:'https://alrema0.github.io/index/?v=2'
+  projects:'https://alrema0.github.io/project-inventory/?v=3',
+  assets:'https://alrema0.github.io/index/?v=3'
 };
 
 /* ---------- Work log (tasks page): own storage key ---------- */
