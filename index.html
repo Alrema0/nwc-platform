@@ -222,8 +222,10 @@ body.embed-mode main{--px:24px}
 .topbar .crumb{font-size:11px;margin-bottom:0}
 .topbar h1{font-size:19px!important;margin:0!important;line-height:1.35}
 .topbar p{font-size:12.5px;margin:1px 0 0!important}
-body.embed-mode .topbar .crumb,body.embed-mode .topbar p{display:none}
-body.embed-mode .topbar{margin-bottom:8px!important}
+/* section name is shown next to the platform name in the top bar */
+.topbar .crumb,.topbar h1{display:none}
+.topbar:not(:has(p:not(:empty))):not(:has(#actions:not(:empty))){display:none}
+body.embed-mode .topbar{display:none}
 /* Assets & Projects: full-page view inside the platform */
 body.embed-mode{overflow:hidden}
 body.embed-mode main{max-width:none!important;height:100vh;height:100dvh;min-height:0;display:flex;flex-direction:column;padding:16px 24px 0!important}
@@ -454,7 +456,7 @@ const badge=(txt,cls)=>`<span class="badge ${cls||''}">${esc(txt)}</span>`;
    Projects: your ready inventory page, shown inside the platform.
    Assets: the asset registration page (repo Alrema0/index). */
 const PAGES={
-  projects:'https://alrema0.github.io/project-inventory/?v=3',
+  projects:'https://alrema0.github.io/project-inventory/?v=4',
   assets:'https://alrema0.github.io/index/?v=4'
 };
 
@@ -653,7 +655,7 @@ function viewHome(){
 }
 function render(){
   document.title=(STANDALONE?VIEWS.find(v=>v.id===STANDALONE).label:SYSTEM_NAME)+' | شركة المياه الوطنية';
-  $('#sys-name').textContent=SYSTEM_NAME;
+  $('#sys-name').textContent=SYSTEM_NAME+(current!=='home'&&VIEWS.find(x=>x.id===current)?' - '+VIEWS.find(x=>x.id===current).label:'');
   document.body.classList.toggle('home-mode',current==='home');
   if(current==='home'){ document.body.classList.remove('embed-mode'); return viewHome(); }
   const v=VIEWS.find(x=>x.id===current);
